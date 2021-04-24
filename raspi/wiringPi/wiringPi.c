@@ -65,6 +65,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <math.h>
 
 #include "wiringPi.h"
 
@@ -88,6 +89,7 @@
 //	due to the Pi v2, v3, etc. and the new /dev/gpiomem interface
 
 static volatile unsigned int GPIO_BASE ;
+static volatile unsigned int GPIO_CLOCK_BASE ;
 
 #define	PAGE_SIZE		(4*1024)
 #define	BLOCK_SIZE		(4*1024)
@@ -99,6 +101,7 @@ static          int wiringPiSetuped = FALSE ;
 // Locals to hold pointers to the hardware
 
 static volatile unsigned int *gpio ;
+static volatile unsigned int *clk ;
 
 // piGpioBase:
 //	The base address of the GPIO memory mapped hardware IO
@@ -344,6 +347,28 @@ int wpiPinToPhys(int wpiPin) {
  *********************************************************************************
  */
 
+// Port function select bits (see "5.2 Register View")
+
+#define	FSEL_INPT		0b000
+#define	FSEL_OUTP		0b001
+#define	FSEL_ALT0		0b100
+#define	FSEL_ALT1		0b101
+#define	FSEL_ALT2		0b110
+#define	FSEL_ALT3		0b111
+#define	FSEL_ALT4		0b011
+#define	FSEL_ALT5		0b010
+
+static uint8_t gpioToGpClkALT0 [] =
+{
+          0,         0,         0,         0, FSEL_ALT0, FSEL_ALT0, FSEL_ALT0,         0,	//  0 ->  7
+          0,         0,         0,         0,         0,         0,         0,         0, 	//  8 -> 15
+          0,         0,         0,         0, FSEL_ALT5, FSEL_ALT5,         0,         0, 	// 16 -> 23
+          0,         0,         0,         0,         0,         0,         0,         0,	// 24 -> 31
+  FSEL_ALT0,         0, FSEL_ALT0,         0,         0,         0,         0,         0,	// 32 -> 39
+          0,         0, FSEL_ALT0, FSEL_ALT0, FSEL_ALT0,         0,         0,         0,	// 40 -> 47
+          0,         0,         0,         0,         0,         0,         0,         0,	// 48 -> 55
+          0,         0,         0,         0,         0,         0,         0,         0,	// 56 -> 63
+} ;
 
 /*
  * pinMode:
@@ -353,11 +378,7 @@ int wpiPinToPhys(int wpiPin) {
 
 void pinMode (int pin, int mode)
 {	
-	int    fSel, shift/*, alt */;
-	if (mode != OUTPUT) {
-		fprintf(stderr, "error: pinMode (int pin, int mode) only supports OUTPUT mode\n");
-		return;
-	}
+	int    fSel, shift, alt;
 
 	if (wiringPiMode == WPI_MODE_PINS)
 		pin = pinToGpio [pin] ;
@@ -370,8 +391,20 @@ void pinMode (int pin, int mode)
 	fSel    = gpioToGPFSEL [pin] ;
 	shift   = gpioToShift  [pin] ;
 
-	// OUTPUT mode only
-	*(gpio + fSel) = (*(gpio + fSel) & ~(7 << shift)) | (1 << shift) ;
+	if (mode == GPIO_CLOCK) {
+		if ((alt = gpioToGpClkALT0 [pin]) == 0)	// Not a GPIO_CLOCK pin
+			return ;
+
+		*(gpio + fSel) = (*(gpio + fSel) & ~(7 << shift)) | (alt << shift) ;
+		usleep (110) ;
+		gpioClockSet      (pin, 1000000) ;	//set the clock frequency to 1MHz
+		
+	} else if (mode == OUTPUT) {
+		*(gpio + fSel) = (*(gpio + fSel) & ~(7 << shift)) | (1 << shift) ;
+		
+	} else {
+		fprintf(stderr, "error: pinMode (int pin, int mode) only supports OUTPUT mode\n");
+	}
 }
 
 
@@ -519,7 +552,7 @@ int wiringPiSetup (void)
   }
 
 // Set the offsets into the memory interface.
-
+  GPIO_CLOCK_BASE = piGpioBase + 0x00101000 ;
   GPIO_BASE	  = piGpioBase + 0x00200000 ;
 
 // Map the individual hardware components
@@ -529,7 +562,20 @@ int wiringPiSetup (void)
   if (gpio == MAP_FAILED)
     return wiringPiFailure (WPI_ALMOST, "wiringPiSetup: mmap (GPIO) failed: %s\n", strerror (errno)) ;
 
-  return 0 ;
+//	Clock control
+  clk = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_CLOCK_BASE) ;
+  if (clk == MAP_FAILED)
+    return wiringPiFailure (WPI_ALMOST, "wiringPiSetup: mmap (CLOCK) failed: %s\n", strerror (errno)) ;
+
+
+  return 0;
+}
+
+int wiringPiTeardown (void)
+{
+	munmap((void*)gpio, BLOCK_SIZE); 
+	munmap((void*)clk, BLOCK_SIZE); 
+	return 0;
 }
 
 
@@ -574,4 +620,74 @@ int wiringPiSetupPhys (void)
   wiringPiMode = WPI_MODE_PHYS ;
 
   return 0 ;
+}
+
+// XXX might be Raspberry Pi4 specific: lets hope the info in "BCM2711 ARM Peripherals"
+// regarding the "Alternative Function Assignments" is not as flawed as some of the other 
+// garbage in that doc.. (these are the same offsets used in original wiringPi so they
+// might not have changed between models..)
+
+// gpioToClk:
+//	(word) Offsets to the clock Control and Divisor register
+//  i.e. 0x70=CM_GP0CTL, 0x78=CM_GP1CTL, 0x80=CM_GP2CTL (below offsets count 4-byte steps)
+static uint8_t gpioToClkCon [] =
+{
+         -1,        -1,        -1,        -1,        28,        30,        32,        -1,	//  0 ->  7
+         -1,        -1,        -1,        -1,        -1,        -1,        -1,        -1, 	//  8 -> 15
+         -1,        -1,        -1,        -1,        28,        30,        -1,        -1, 	// 16 -> 23
+         -1,        -1,        -1,        -1,        -1,        -1,        -1,        -1,	// 24 -> 31
+         28,        -1,        28,        -1,        -1,        -1,        -1,        -1,	// 32 -> 39
+         -1,        -1,        28,        30,        28,        -1,        -1,        -1,	// 40 -> 47
+         -1,        -1,        -1,        -1,        -1,        -1,        -1,        -1,	// 48 -> 55
+         -1,        -1,        -1,        -1,        -1,        -1,        -1,        -1,	// 56 -> 63
+} ;
+
+
+
+/*
+ * gpioClockSet:
+ *	Set the frequency on a GPIO clock pin
+ *********************************************************************************
+ */
+//#define OSC_CLOCK 19200000	/* older Raspberry devices*/
+#define OSC_CLOCK 54000000	/* Raspberry Pi 4B*/
+
+#define	CM_GPCTR_PASSWD		0x5A000000
+#define	CM_GPCTR_SRC		1			/* always use oscillator as clock source */
+#define	CM_GPCTR_BUSY		0x80
+#define	CM_GPCTR_ENAB		0x10		/* enable the clock generator */
+
+void gpioClockSet (int pin, int freq)
+{
+  int divi, divf ;
+
+  pin &= 63 ;
+
+  if (wiringPiMode == WPI_MODE_PINS)
+    pin = pinToGpio [pin] ;
+  else if (wiringPiMode == WPI_MODE_PHYS)
+    pin = physToGpio [pin] ;
+  else if (wiringPiMode != WPI_MODE_GPIO)
+    return ;
+
+  divi = OSC_CLOCK / freq ;
+  // note: garbage specs incorrectly claim 1024 instead of 4096..
+  divf = round(((double)OSC_CLOCK / freq-divi) * 4096);	// orig wiringPi impl always rounds off - which makes errors bigger than necessary
+
+  if (divi > 4095) {
+	fprintf(stderr, "error: invalid divf\n");
+	return;
+  }
+
+  int offset = gpioToClkCon [pin];
+  if (offset == -1) {
+	fprintf(stderr, "error: specified pin cannot be used for clock signal");
+	return;
+  }
+  
+  *(clk + offset) = CM_GPCTR_PASSWD | CM_GPCTR_SRC;					// stop GPIO clock
+  while ((*(clk + offset) & CM_GPCTR_BUSY) != 0) {}					// ... and wait
+
+  *(clk + offset+1) = CM_GPCTR_PASSWD | (divi << 12) | divf;		// set dividers
+  *(clk + offset) = CM_GPCTR_PASSWD | CM_GPCTR_ENAB | CM_GPCTR_SRC;	// Start Clock
 }

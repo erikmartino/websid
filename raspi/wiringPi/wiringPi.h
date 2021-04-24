@@ -49,7 +49,8 @@
 
 // Pin modes
 
-#define	OUTPUT			 1			/* THE ONLY MODE LEFT IN THIS STRIPPED DOWN VERSION */
+#define	OUTPUT			 1			/* THE ONLY MODES LEFT IN THIS STRIPPED DOWN VERSION */
+#define	GPIO_CLOCK		 3
 
 
 #define	LOW				 0
@@ -74,7 +75,11 @@ extern int  wiringPiSetup       (void) ;
 extern int  wiringPiSetupGpio   (void) ;
 extern int  wiringPiSetupPhys   (void) ;
 
+extern int wiringPiTeardown (void);
+
 extern          void pinMode             (int pin, int mode) ;
+
+void gpioClockSet (int pin, int freq); // added minimal improvements
 
 // @param value: LOW or HIGH
 extern          void digitalWrite        (int pin, int value) ;

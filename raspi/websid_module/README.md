@@ -1,9 +1,8 @@
 # WebSid (playback device driver)
 
 ################################################################################
-Experimental! This driver is still in development and it is not yet running 
-in a stable manner. In order to allow for precise timing, it blocks interrupts 
-which some parts of the OS do not seem to appreciate.
+Experimental: This driver is still in development and it is not yet running 
+in a 100% stable manner. 
 Sometimes the driver runs fine for a long time and next time it just freezes
 the machine after 10secs. Make sure to not have any unsaved work open when 
 you start the driver! In spite of its stability issues, the driver allows to 
@@ -21,16 +20,17 @@ userland player will automatically use this driver whenever it detects it.
 The cycle exact timing will not make any difference to most "normal" SID songs, 
 but it is crucial for timing critical songs (e.g. songs that use "advanced" 
 digi-sample techniques). You can check /var/log/kern.log - where the driver will
-log the timing performance whenever a song is done playing. (When the c1 & c2 
-counts are 0 it means that every GPIO write was performed in exactly the
+log the timing performance whenever a song is done playing. (Whan all the 
+numbers are 0 it means that every GPIO write was performed in exactly the
 right micro second.)
 	
+
+Note #1: the tuned Linux configuration	mentioned in the parent folder README.md
+is crucial here, so that the CPU core #3 can be completely hijacked by this 
+module without starving other threads that might be vital to the system.
 	
-Note #1: Linux must be booted using "isolcpus=3 rcu_nocbs=3 rcu_nocb_poll=3 
-nohz_full=3" (see /boot/cmdline.txt) so that the CPU core #3 can be completely 
-hijacked by this module without starving other threads that might be vital to the 
-system. There will then still be the below threads left on core #3 but it seems 
-that those can be safely starved "for a while":
+There will then still be the below threads left on core #3 but it seems that 
+those can be safely starved "for a while" (or can they not?):
 
 pi@raspberrypi:~ $ ps -eo pid,ppid,ni,comm | grep /3
    25     2   0 cpuhp/3
@@ -38,6 +38,8 @@ pi@raspberrypi:~ $ ps -eo pid,ppid,ni,comm | grep /3
    27     2   0 ksoftirqd/3
    28     2   0 kworker/3:0
    29     2 -20 kworker/3:0H
+   30     2   0 rcuog/3
+   31     2   0 rcuos/3
  (cpuhp=cpu hotplug, migration=distributes workload across CPU cores,
  ksoftirq=thread raised to handle unserved software interrupts)   
 
@@ -69,7 +71,7 @@ pi@raspberrypi:~ $ ps -eo pid,ppid,ni,comm | grep /3
 
 	
 
-## Depencencies
+## Dependencies
 
 You'll need a Raspberry Pi 4B and the Linux kernel source must have been installed and compiled
 (see: https://www.stephenwagner.com/2020/03/17/how-to-compile-linux-kernel-raspberry-pi-4-raspbian/ ).
@@ -80,7 +82,7 @@ modules. So in order to use this module on your machine you'll have to disable t
 checks before building your kernel. see: 
 kernel/linux/include/linux/license.h  (just "return 1;" in "license_is_gpl_compatible")
 (and maybe kernel/linux/scripts/mod/modpost.c (just "return;" in "check_for_gpl_usage"))
-PS: rebuilding a previously built kernel with these changes takes less than 5 minutes..
+PS: don't worry, rebuilding a previously built kernel with these changes takes less than 5 minutes..
 
 
 ## Background information
@@ -117,6 +119,8 @@ When the play loop waits for the next script, there are different possible senar
        the deque based "userland" impl may have allowed 2 buffers in those special cases
        where the playback was done handling the script but the current playback interval
        was still ongoing (this might have added some "load averaging" in those special cases).
+	   This scenario might occur when using a Raspberry device that is too slow or a device 
+	   that has automatically clocked down due to cpu overheating..
 
 
 

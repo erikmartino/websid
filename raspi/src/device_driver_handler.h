@@ -8,9 +8,6 @@
 
 #include "playback_handler.h"
 
-void detectDeviceDriver(int *fd, volatile uint32_t **buffer_base);
-
-
 class DeviceDriverHandler : public PlaybackHandler {
 public:
 	DeviceDriverHandler(int device_fd, volatile uint32_t *buffer_base);
@@ -18,11 +15,14 @@ public:
 
 	void recordBegin();
 	void recordEnd();
+	
+	static void detectDeviceDriver(int *fd, volatile uint32_t **buffer_base);
+
 private:
 	uint32_t fetchBuffer();
 	void feedBuffer(uint32_t addr_offset);
 	void flushBuffer(uint32_t addr_offset);
-	void flushFlags(uint32_t addr_offset);
+	void pushFeedFlag(uint32_t addr_offset);
 };
 
 

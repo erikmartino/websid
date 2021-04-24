@@ -12,6 +12,12 @@
 
 static volatile u32 *_timer_regs = 0;
 
+
+// todo: check what the actual limitations of ktime_get_ns() are... would it actually 
+// allow for more precise timing or is it one of those joke APIs that round to the closest 
+// milli anyway?
+
+ 
 int system_timer_mmap(void) {
 	// see https://mindplusplus.wordpress.com/2013/08/09/accessing-the-raspberry-pis-1mhz-timer-via-kernel-driver/
 
@@ -21,7 +27,7 @@ int system_timer_mmap(void) {
 		return 0;
 	}
 	
-	printk(KERN_INFO "websid; system_timer_mmap completed\n");
+	printk(KERN_INFO "websid: system_timer_mmap completed\n");
 	return 1;
 }
 

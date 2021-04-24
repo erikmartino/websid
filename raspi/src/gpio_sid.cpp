@@ -40,8 +40,10 @@
 #define D3      4
 #define D4      5
 #define D5      6
-#define D6      10	// SPI chip select 0	XXX bad choice of pin
+#define D6      10	// SPI chip select 0	might be a bad choice for pin?
 #define D7      11	// SPI chip select 1
+
+#define CLK     29
 #endif
 
 // corresponding mappings (for RPi4B) generated from the above
@@ -60,6 +62,8 @@
 #define D5      25
 #define D6      8
 #define D7      7
+
+#define CLK     21
 #endif
 
 #if(USE_MODE==PHYS)
@@ -77,6 +81,9 @@
 #define D5      22
 #define D6      24
 #define D7      26
+
+#define CLK     40
+
 #endif
 
 // mask for bulk write: only update masked pins in the 0..16 range.. 
@@ -146,7 +153,7 @@ void printPinMappings() {
 }
 #endif
 
-void gpioInitSID(){
+void gpioInitClockSID(){
 	// lets verify that the different mappings all work the same..
 #if(USE_MODE==WPI)
 	wiringPiSetup();
@@ -161,6 +168,24 @@ void gpioInitSID(){
 #ifndef USE_ORIG_WIRINGPI
 //	printPinMappings();
 #endif	
+
+#ifndef USE_ORIG_WIRINGPI
+	// to verify that the different mappings all work the same..
+//	printPinMappings();
+#endif	
+
+	pinMode(CLK, GPIO_CLOCK);
+	gpioSetClockSID(CLOCK_PAL);
+//	gpioSetClockSID(CLOCK_1MHZ);
+}
+
+void gpioTeardownSID(){
+	wiringPiTeardown();
+}
+
+void gpioInitSID(){
+	gpioInitClockSID();
+
 	pinMode(D0, OUTPUT);
 	pinMode(D1, OUTPUT);
 	pinMode(D2, OUTPUT);
@@ -177,7 +202,7 @@ void gpioInitSID(){
 	pinMode(A4, OUTPUT);
 	
 	pinMode(CS, OUTPUT);
-	
+		
 #ifdef USE_ORIG_WIRINGPI
 	digitalWrite(D0, LOW);
 	digitalWrite(D1, LOW);
@@ -200,6 +225,9 @@ void gpioInitSID(){
 #endif
 }
 
+void gpioSetClockSID(uint32_t freq) {
+	gpioClockSet (CLK, freq);
+}
 
 void gpioPokeSID(uint8_t addr, uint8_t value) {
 	static uint32_t ts;
@@ -256,7 +284,7 @@ void gpioPokeSID(uint8_t addr, uint8_t value) {
 #endif
 	
 	ts= micros(); ts+= 2;	// 2 micro wait seems to work better (than just 1 micro)
-	while (micros() <  ts) {}
+	while (micros() <=  ts) {}
 
 	digitalWrite(CS, HIGH);
 }

@@ -155,6 +155,13 @@ void startHyperdrive() {
 	// the cpuinfo_cur_freq for core #3 by default seems to be idling at 600MHz! and only when the
 	// playback thread is run it goes up to 1500MHz (it is unclear how this might interfer with the
 	// timing and the interpretation of the system counter)
+	
+	
+	// this "should" lock all the process's memory so it is not swapped out to disk by the kernel 
+	// (unfortunately this had no obvious benefit and I am not sure if this actually does anything)
+	if ( mlockall(MCL_CURRENT) == -1 ) {
+		cout << "error: cannot lock memory" << endl;
+	}
 		
 	// although recommended on "stackoverflow" the below does not seem to work at 
 	// all.. in any case it does not seem to have a permament effect on the system 
@@ -167,15 +174,17 @@ void startHyperdrive() {
 	// .. so this may not be necessary:
 	system("sudo cp /sys/devices/system/cpu/cpu3/cpufreq/cpuinfo_max_freq "
 		"/sys/devices/system/cpu/cpu3/cpufreq/scaling_max_freq");
-	
-	// .. supposedly the micro clock glitches at 1.5Hz - todo: try to find test case
-	
+		
 	// FIXME clock change might mess up SPI timing and for future A/D measurement 
 	// extensions it might be necessary to run those off a dedicated core with some optimized
 	// clock speed
 }
 
-void stopHyperdrive() {	
+void stopHyperdrive() {
+	if ( munlockall() == -1 ) {
+		cout << "error: cannot unlock memory" << endl;
+	}
+	
 	// restore to default
 	system("sudo cp /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq "
 		"/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq");

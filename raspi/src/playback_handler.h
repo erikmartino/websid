@@ -15,6 +15,7 @@ public:
 	
 	virtual void recordBegin() = 0;
 	virtual void recordEnd() = 0;
+	
 	void recordPokeSID(uint32_t ts, uint8_t reg, uint8_t value);
 
 protected:	

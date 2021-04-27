@@ -1,6 +1,6 @@
 /*
 	This impl controls the SID-chip directly from a "userland" thread 
-	that runs on the relavively "isolated" CPU core #3. In spite of 
+	that runs on the relatively "isolated" CPU core #3. In spite of 
 	giving that thread high prio (etc), the thread is not capable to 
 	provide consistent 1 micro second precision:
 
@@ -9,7 +9,8 @@
 	delays of ~7 micros (but which may occasionally peak up to 30 
 	micros). Looking at "cat /proc/interrupts", the respective 
 	disturbances in core #3 seem to originate from  "arch_timer" 
-	(GICv2 30 Level).
+	(GICv2 30 Level). (Actually it depends on how you built your kernel, 
+	and "dyna-tick" based systems will behave differently.)
 
 	For regular songs that just expect some register update every 20ms 
 	these glitches are irrelevant as long as the register is eventually 
@@ -319,7 +320,7 @@ class PlaybackThread {
 	}
 	
 	void playLoop() {
-		migrateThreadToCore3();
+		migrateThreadToCore(3);
 		
 		uint32_t ts_offset= 0;
 		
@@ -345,7 +346,7 @@ public:
 	PlaybackThread() {
 		// if core #3 has been properly configured in /boot/cmdline.txt then 
 		// this thread should be pretty "alone" on that core.. but just in case:		
-		scheduleRT();
+		scheduleRT();	// XXXX error: this changes the main thread... not the player thread!!!
 		
 		_run_next_script = true;
 		_buffer_pool = new BufferPool(_script_buf1, _script_buf2);

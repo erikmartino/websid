@@ -51,6 +51,7 @@
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include <linux/preempt.h>
+#include <linux/membarrier.h>
 
 #include "websid_driver_api.h"
 
@@ -97,7 +98,7 @@ static unsigned long _irq_flags;
 // handling" => "Full dynaticks system (tickless)") when compiling the 
 // kernel, seems to work well to eliminate those IRQs on core #3..
 
-#define run_undisturbed(undisturbed_func) \
+#define RUN_UNDISTURBED(undisturbed_func) \
 	/* CAUTION: the undisturbed_func MUST NOT use anything depending on */\
 	/* interrupts (e.g. printk, etc) or it will freeze! */\
 	/* https://kernel.readthedocs.io/en/sphinx-samples/kernel-hacking.html */\
@@ -113,8 +114,17 @@ static unsigned long _irq_flags;
 	local_irq_restore(_irq_flags);	/* re-enable hard IRQs */\
 	put_cpu();
 
+// temporarily reenable IRQs 
+#define SCHEDULE() \
+	local_bh_enable();\
+	local_irq_restore(_irq_flags);\
+	put_cpu();\
+	schedule();\
+	get_cpu();\
+	local_irq_save(_irq_flags);\
+	local_bh_disable();
 
-
+	
 // ------------ setup of the basic /dev/websid driver API -------------------------
 
 static int	websid_open(   struct inode *inodep, struct file *fp);
@@ -156,7 +166,7 @@ static u32 _feed_index = 0; 					// 0 or 1
 static u32 _ts_offset;
 
 // just a sanity check: next buffer to be delivered by the userland side
-u32 _expecting = 0;	
+static u32 _expecting = 0;	
 
 // this is called before the player plays one of the buffers..
 // i.e. the userland must always be pointed to the *other* buffer, and if
@@ -171,8 +181,10 @@ static u8 *_buf_t0;	// tmp var used in push_fetch_buffer macro
 	} else {\
 		_feed_index ^= 1; /* _feed_index ? 0 : 1 */\
 		_buf_t0 = (u8*) (_feed_index ? _script_buf1 : _script_buf0);\
+		mb();\
 		_expecting = *_fetch_flag_ptr = ((u32)_buf_t0) - ((u32)_shared_area);\
-		/*_buf_t0[0] = 0; *//* an end-marker might be usefull precaution - */\
+		mb();\
+		/*_buf_t0[0] = 0; *//* an end-marker might be a usefull precaution - */\
 							/* but rather keep all buffer writes to the */\
 							/* "userland" producer. */\
 	}\
@@ -248,7 +260,9 @@ static volatile u32 *_p_buf= 0;
 		_p_ts += _ts_offset;\
 		if ((_p_ts < _ts_offset) && (_p_buf != _reset_script)) { /* counter overflow */\
 			_player_status = ERR_COUNTER_OVERFLOW;\
+			mb();\
 			*_feed_flag_ptr = RESET_SCRIPT_MARKER; /* trigger exit sequence */\
+			mb();\
 			return;\
 		}\
 		_p_i += 2;			/* 2x u32 per entry.. */\
@@ -257,7 +271,7 @@ static volatile u32 *_p_buf= 0;
 		if (_p_buf == _reset_script) {\
 			/* ts in the "reset script" are garbage */\
 			TIMOUT_HANDLER(now, 3); /* 3 micro delay to give SID time between updates*/\
-			while (KEEP_TRYING()) { now = micros(); }\
+			while (KEEP_TRYING()) { now = micros(); mb(); }\
 		} else if (_p_now > _p_ts) {\
 			/* problem: we are already to late (maybe the "userland" feed was too slow?) */\
 			/* the problem would probably affect all the following timestamps as well, */\
@@ -278,7 +292,10 @@ static volatile u32 *_p_buf= 0;
 		} else {\
 			/* detected "gaps" might be used to "do other stuff" as an */\
 			/* optimization.. but hopefully that won't be necessary*/\
-			while (micros() < _p_ts) { /* just wait and poll  */ }\
+			if ((_p_ts-micros()) > 100) {\
+				SCHEDULE();	/* it seems: cond_resched or rcu_all_qs doesn't work here.. */\
+			}\
+			while (micros() < _p_ts) { /* just wait and poll  */ mb(); }\
 		}\
 		\
 		poke_SID(((*_p_data) >> 8) & 0x1f, (*_p_data) & 0xff);\
@@ -300,8 +317,8 @@ void play_loop(void) {
 	
 		/* 1st "fetch" has been triggered during init */
 		while (_p_buf == 0) {
+			mb();
 			_p_buf = (volatile u32*) (*_feed_flag_ptr);	/* wait for "userland" feed */
-						
 			/* at this stage "_p_buf" is still a relative offset (not an */
 			/* absolute address) just wait for main to feed some data */
 			if (!_run_next_script) goto end_play_loop;
@@ -310,8 +327,10 @@ void play_loop(void) {
 		if (((u32)_p_buf) == RESET_SCRIPT_MARKER) {
 			/* special marker: "userland" closed the connection */
 			_p_buf = _reset_script;
+			mb();
 			(*_fetch_flag_ptr) = 0;	/* stop fetching new buffers */
 //			(*_feed_flag_ptr) = 0;	/* don't ackn to block more feeding */			
+			mb();
 			
 			_run_next_script = 0; /* exit the playback thread after "reset-script" */
 		} else {			
@@ -324,15 +343,16 @@ void play_loop(void) {
 			/* convert "_p_buf" offset to absolute address */
 			_p_buf = (volatile u32*)(((u32)_shared_area) + ((u32)_p_buf));
 			
+			mb();
 			(*_feed_flag_ptr) = 0;	/* ackn reception of the buffer */
-						
+			mb();
+								
 			push_fetch_buffer();	/* immediately request the other buffer to */
 									/* be filled so it should be ready by the */
 									/* time it is needed */
 		}
-		play_script();
-		
-	//	cond_resched();	// avoid RCU CPU stall warnings? probably too expensive
+		mb();
+		play_script();		
 	}
 }
 
@@ -360,6 +380,7 @@ static void init_player(void) {
 	
 	_feed_index = 0; 
 	*_feed_flag_ptr = *_fetch_flag_ptr = 0;
+	mb();
 	
 	push_fetch_buffer();	// signal "open for business" to "userland"
 }
@@ -371,10 +392,14 @@ int sid_player(void *data) {
 	
 //	printk(KERN_INFO "websid: player thread start\n");		
 	
-	run_undisturbed(play_loop);
+	RUN_UNDISTURBED(play_loop);
 	
+	
+	// issue: without blocking IRQs there are actual timing glitches (up to 9 micros) - but 
+	// full-dyna-ticks running on both #2&#3 crashes quickly with this, even without any disabled IRQ
 //	play_loop();
-//	run_undisturbed(test); // check if this might already crash the system
+
+//	RUN_UNDISTURBED(test); // check if this might already crash the system
 
 	_player_done= 1;
 
@@ -444,10 +469,12 @@ static int websid_release(struct inode *inodep, struct file *filep) {
 			// these might create race-conditions..
 			*_fetch_flag_ptr = 0;
 			*_feed_flag_ptr = RESET_SCRIPT_MARKER;
+			mb();
 			
 			while (KEEP_TRYING()) {	// wait for player to exit
 				if (_player_done) break;
-				now= micros();
+				now= micros();				
+				mb();
 			}
 			if (!_player_done) {
 				// try to interrupt whatever "while" the player might be stuck in
@@ -532,7 +559,7 @@ static void __exit websid_exit(void) {
 		
 		if (_dev_open_count) {
 			printk(KERN_INFO "websid: waiting for open connection to close\n");
-			while (_dev_open_count && KEEP_TRYING()) { }	// 3s grace period
+			while (_dev_open_count && KEEP_TRYING()) { mb(); }	// 3s grace period
 			
 			if (_dev_open_count) {
 				printk(KERN_INFO "websid: connection is still open - this might crash\n");

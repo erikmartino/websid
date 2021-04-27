@@ -134,15 +134,16 @@ void scheduleRT() {
 	struct sched_param param;
 	param.sched_priority = prio;
 
-	sched_setscheduler(0,SCHED_FIFO,&param);		
-	system("echo -1 >/proc/sys/kernel/sched_rt_runtime_us");	// let thread use 100% CPU
+	sched_setscheduler(0,SCHED_FIFO,&param);
+	// Setting the value to -1 means that real-time tasks may use up to 100% of CPU times
+	system("echo -1 >/proc/sys/kernel/sched_rt_runtime_us");
 	nice(-20);	// maximum (just in case)
 }
 
-void migrateThreadToCore3() {
+void migrateThreadToCore(int idx) {
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
-	CPU_SET(3,&cpuset);
+	CPU_SET(idx,&cpuset);
 	if (sched_setaffinity(0,sizeof(cpu_set_t),&cpuset)) {
 		std::cout << "error: could not assign process to core #3" << std::endl;
 	}

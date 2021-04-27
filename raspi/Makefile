@@ -9,7 +9,8 @@ CXX = g++ -fnon-call-exceptions -std=c++11
 CFLAGS =  -DRPI4 -Wno-pointer-sign -Wall -c  
 CXXFLAGS = -DRPI4 -fno-rtti -Wall -D__STDC_LIMIT_MACROS
 
-LDFLAGS = -funroll-loops -OFast
+# -OFast
+LDFLAGS = -funroll-loops -O2
 
 SRCDIR=../src
 RSRCDIR=./src

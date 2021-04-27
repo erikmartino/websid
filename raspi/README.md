@@ -55,21 +55,24 @@ PSID (Lightforce.sid) and 3-12ms for an RSID (LMan - Vortex.sid). This performan
 leaves some margin for error but it is obviously not enough leeway to integrate additional 
 1MHz synchonisation directly into the emulation logic. (The measurements are an indication 
 that the program might be successfully adapted to also run on slower Raspberry Pi 3 
-devices - in case anyone what's to try that. If necessary, WebSid's SID chip emulation 
+devices - in case anyone wants to try that. If necessary, WebSid's SID chip emulation 
 could here still be disabled as a performance optimization. To be run on other 
 Raspberry models, in any case the "getBaseAddress" function in rpi4_utils.cpp would need 
 to be adapted. Also The GPIO based clocking of the SID might not be practical on 
 slower models.)
 
 The current impl uses two CPU cores to make playback as "precise" as possible. The actual 
-playback is performed by a relatively "dumb" playback thread that runs on CPU core #3. 
-That core #3 should be "isolated" for "exclusive" use by the playback thread. The 
+playback is performed by a relatively "dumb" playback-thread that runs on CPU core #3. 
+The emulator-thread runs on core #2. The core #3 must be "isolated" for "exclusive" 
+use by the playback thread and if the "device driver" based impl should be used, then 
+CPU core #2 should be equally isolated for exclusive use by the emulator-thread. The 
 playback thread just follows a sequential playback script that tells it when to write 
-some SID register. Playback scripts are supplied by a second thread (the main thread) which 
-runs the WebSid emulator and which is not very timing critical (see performance 
+some SID register. Playback scripts are supplied by the emulator-thread (the main thread) 
+which runs the WebSid emulator and which is not very timing critical (see performance 
 considerations above).
 
-Advanced users might peek into the "websid_module" folder...
+Advanced users might peek into the "websid_module" folder for details on the "device
+driver" based implementation.
 
 
 todo: The idea is to eventually extend the "SidBerry" device such that the SID's
@@ -93,8 +96,8 @@ written to some file to ease comparisons with the real SID signal.
    the respective feature in the configurator: "Timer tick handling" => "Full
    dynaticks system (tickless)". Compile and install that kernel. Then add
    the following to the beginning of /boot/cmdline.txt (the RPi4 must
-   be rebooted after that change): isolcpus=3 rcu_nocbs=3 rcu_nocb_poll=3 nohz_full=3 
-   These options will effectively "isolate" the CPU core#3 from any normal use
+   be rebooted after that change): isolcpus=2,3 rcu_nocbs=2,3 rcu_nocb_poll=2,3 nohz_full=2,3 
+   These options will effectively "isolate" the CPU cores #2 & #3 from any normal use
    by the OS.(Please let me know if you find some configuration that
    works even better..)
    
@@ -102,7 +105,7 @@ written to some file to ease comparisons with the real SID signal.
    tasks (e.g. no desktop) running as possible (at least that's how I tested)
 
 4) start the player using sudo, e.g. "sudo ./websid somesong.sid" (see 
-   "websid_module" for advanced options)
+   "websid_module" folder for advanced options)
 
 5) playback can be interrupted by pressing ctrl-C
    

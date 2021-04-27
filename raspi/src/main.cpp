@@ -182,7 +182,7 @@ void loadSidFile(int argc, char *argv[]) {
 	printSongInfo();
 }
 
-void int_callback(int s){
+void int_callback(int s) {
 	// SIGINT (ctrl-C) handler so that proper cleanup can be performed
 	_max_frames = 0;		// make play loop end at next iteration	
 		
@@ -221,6 +221,8 @@ void initPlaybackHandler() {
 #endif
 
 int main(int argc, char *argv[]) {
+	migrateThreadToCore(2);	// run main thread on isolated core #2 to avoid unnecessary conflicts
+
 	init();
 	
 	startHyperdrive();

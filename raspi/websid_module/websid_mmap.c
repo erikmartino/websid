@@ -34,6 +34,7 @@ u32 *_script_buf0;
 u32 *_script_buf1; 
 
 static int setup_shared_mem(void) {
+	u32 i;
 	
 	// setup buffers that can be mapped directly into "userland";
 	// using kernel mem should ensure that there are no sudden 
@@ -54,8 +55,9 @@ static int setup_shared_mem(void) {
 		_script_buf1 = (u32*)(((void*)(_script_buf0))+BUF_SIZE);
 		
 		// init with "end markers" just in case
-		_script_buf0[0] = _script_buf0[MAX_ENTRIES*INTS_PER_ENTRY] = 0;
-		_script_buf1[0] = _script_buf1[MAX_ENTRIES*INTS_PER_ENTRY] = 0;
+		for (i = 0; i < (BUF_SIZE >> 2); i++) {
+			_script_buf0[i] = _script_buf1[i] = 0;
+		}
 		
 		_fetch_flag_ptr = (volatile u32*)(_shared_area + (FETCH_FLAG_OFFSET << 2));
 		_feed_flag_ptr = (volatile u32*)(_shared_area + (FEED_FLAG_OFFSET << 2));

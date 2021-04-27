@@ -75,22 +75,16 @@ DeviceDriverHandler::DeviceDriverHandler(int device_fd, volatile uint32_t *buffe
 
 	gpioInitClockSID();
 	
-
-	// new kernel version seems to have a new kind of RT throttling in 
-	// place that might slow the driver thread on core #3 (try to get 
-	// rid of that throttling .. though that might no longer be necessary 
-	// with NO_HZ_FULL)
-
+	// necessary to avoid: "sched: RT throttling activated"
 	// Defines the period in μs (microseconds) to be considered as 100% of CPU bandwidth.
-	system("sudo echo '600000000' > /proc/sys/kernel/sched_rt_period_us");	//  default: 1000000
+	system("sudo echo '600000000' > /proc/sys/kernel/sched_rt_period_us");	//  default: 1000000	
 	
-	// Setting the value to -1 means that real-time tasks may use up to 100% of CPU times
-	system("sudo echo '-1' > /proc/sys/kernel/sched_rt_runtime_us");		//  default: 950000
-
+	// precondition!: run this thread on isolated core#2 - otherwise it will starve regular system
+	scheduleRT(); 
+	
 	// disable to avoid having the logs filled with these:
 	system("sudo echo '600' > /proc/sys/kernel/hung_task_timeout_secs");	//  default: 120
-	system("sudo echo '1' >  /sys/module/rcupdate/parameters/rcu_cpu_stall_suppress");	//  default: 0
-	
+	system("sudo echo '1' >  /sys/module/rcupdate/parameters/rcu_cpu_stall_suppress");	//  default: 0	
 }
 
 DeviceDriverHandler::~DeviceDriverHandler() {
@@ -117,6 +111,9 @@ DeviceDriverHandler::~DeviceDriverHandler() {
 // seconds..)
 #define DRIVER_TIMEOUT 10000000
 
+// just in case
+#define barrier() __asm__ __volatile__("": : :"memory")
+
 uint32_t DeviceDriverHandler::fetchBuffer() {
 	// blocks until a buffer is available in the kernal driver.. 
 
@@ -131,11 +128,13 @@ uint32_t DeviceDriverHandler::fetchBuffer() {
 		// availability of the buffer should be detected as quickly 
 		// as possible since any time wasted here substracts from the 
 		// 17-20ms available to produce the next buffer
-		
-		if ((volatile uint32_t)(*_fetch_flag_ptr)) {
+				
+		barrier(); 
+		if (*_fetch_flag_ptr) {
 			// pass "ownership" of the buffer to "userland"
-			addr_offset = (volatile uint32_t)(*_fetch_flag_ptr);
+			addr_offset = *_fetch_flag_ptr;
 			(*_fetch_flag_ptr) = 0;
+			barrier(); 
 			break;
 		}
 		now = micros();
@@ -172,19 +171,26 @@ void DeviceDriverHandler::pushFeedFlag(uint32_t addr_offset) {
 	// previously updated buffer.. otherwise the player might play
 	// inconsistent buffer data..
 	
+	barrier(); 
 	*_feed_flag_ptr = addr_offset;
+	barrier(); 
 
 	if(addr_offset) {
 		msync((void*)(_buffer_base + (FEED_FLAG_OFFSET<<2)), 
 				sizeof(uint32_t), MS_INVALIDATE);	// flush that page
 	}
+	barrier(); 
 }
 
+extern void int_callback(int s);
+
 void DeviceDriverHandler::feedBuffer(uint32_t addr_offset) {	
-	TIMOUT_HANDLER(now, DRIVER_TIMEOUT);	
+	TIMOUT_HANDLER(now, DRIVER_TIMEOUT);
 	
+	barrier();
 	while ((volatile uint32_t)(*_feed_flag_ptr) && KEEP_TRYING()) {
-		now = micros();	/* wait until kernel retrieved the previous one */ 		
+		now = micros();	/* wait until kernel retrieved the previous one */ 
+		barrier();
 	}
 
 	if ((volatile uint32_t)(*_feed_flag_ptr)) {
@@ -193,7 +199,7 @@ void DeviceDriverHandler::feedBuffer(uint32_t addr_offset) {
 		// gets used we should not be here!
 		
 		cout << "error: feedBuffer illegal state" << endl;
-		raise (SIGINT);			// this should trigger a regular teardown..
+		int_callback(1); // call directly.. SIGINT takes too long
 		_script_buf = 0;		// disable write ops until SIGINT performs its job
 		
 	} else {
@@ -204,8 +210,8 @@ void DeviceDriverHandler::feedBuffer(uint32_t addr_offset) {
 void DeviceDriverHandler::recordBegin() {
 	_buffer_offset =  fetchBuffer();
 	if (_buffer_offset == 0) {
-		cout << "timeout: device driver is not responding" << endl;
-		raise (SIGINT);			// this should trigger a regular teardown..
+		cout << "timeout: device driver is not responding" << endl;		
+		int_callback(1); // call directly.. SIGINT takes too long
 		_script_buf = 0;		// disable write ops until SIGINT performs its job
 	} else {
 		_script_buf = (uint32_t*)(_buffer_base + _buffer_offset);
@@ -215,7 +221,7 @@ void DeviceDriverHandler::recordBegin() {
 
 void DeviceDriverHandler::recordEnd() {
 	if (!_script_buf) {
-		// SIGINT has already been sent (see recordBegin())
+		// exit sequence has already been initiated (see recordBegin())
 	} else {
 		// buffer is never reset and it will still contain the
 		// garbage from longer previous scripts: set an "end marker"

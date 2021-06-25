@@ -55,9 +55,9 @@ ideally the original output would need to be at a constant maximum which
 would then allow the technique to modulate it to "anything" 
 between 0 and that maximum. A flaw in the old 6581 SIDs made them
 particularly suceptible to this exploit: respective chips always produce 
-some kind of output voltage offset which means that there is always "some" 
-kind of original signal that can be modulated via the master volume -
-even when there is no regular voice output.
+a relatively large DC voltage offset on the master volume D/A which means 
+that there is always "some" kind of original signal that can be modulated 
+via the master volume - even when there is no regular voice output.
 
 The advantage of this approach is the fast execution speed, since it
 only requires one register-write (i.e. 4-clock cycles) to output a sample.
@@ -79,7 +79,7 @@ resolution of individual samples accordingly.
 	(ps: use https://deepsid.chordian.net/ to play the songs online)
 
 However this technique usually works poorly on the newer 8580 SID 
-chips, since those no longer produce the flawed voltage offset, meaning 
+chips, since those no longer produce the flawed DC voltage offset, meaning 
 that there may be very little original signal avilable for modulation 
 (depending on what other regular output the SID's voices are producing).
 
@@ -103,7 +103,10 @@ requires one register-write (i.e. 4-clock cycles) to output a sample,
 i.e. it is extremely fast allowing for maximum sample rates.
 
 Due to the fact that the "carrier signal" has been specifically set up,
-the approach runs fine also on newer 8580 models.
+the approach runs fine also on newer 8580 models. However, due to the 
+different behavior of their A/D converter and filter components, older
+6581 SID chips must be configured somewhat differently than newer 8580 
+SID chips in order to get optimum results.
 
 A sample can now have more than 4-bits (though Mahoney's 8-bit claim 
 is exaggerated and it is probably closer to 6-7 bits)

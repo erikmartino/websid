@@ -220,6 +220,20 @@ static void patchWeAreDemoIfNeeded(uint16_t init_addr) {
 	}
 }
 
+static void patchGraphixsmaniaIfNeeded(uint16_t init_addr) {
+	// Graphixmania_2_part_6.sid: For the sake of good old MDA times..
+	// making Tim's song greater.. (seems Mat had forgotten to disable the
+	// D418 write in the regular IRQ player when adding the NMI digi
+	// player - which leads to unnecessary noise even on the real
+	// hardware..)
+
+		uint8_t pattern[] = {0xB8,0x29,0x0F,0x8D,0x18,0xD4};
+	if ((init_addr == 0x7000) && (memMatch(0x1214, pattern, 6))) {
+		memWriteRAM(0x48F9, 0xad);
+	}
+}
+
+
 void hackIfNeeded(uint16_t init_addr) {
 	patchImmigrantSongIfNeeded(init_addr);
 	
@@ -228,6 +242,8 @@ void hackIfNeeded(uint16_t init_addr) {
 	patchSwallowIfNeeded(init_addr);
 	
 	patchWeAreDemoIfNeeded(init_addr);
+	
+	patchGraphixsmaniaIfNeeded(init_addr);
 }
 
 

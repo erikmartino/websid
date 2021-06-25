@@ -219,18 +219,18 @@ void SID::resetEngine(uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate
 	_filter->reset(sample_rate);
 }
 
-void SID::clockOscillators() {
+void SID::clockWaveGenerators() {
 	// forward oscillators one CYCLE (required to properly time HARD SYNC)
 	for (uint8_t voice_idx= 0; voice_idx<3; voice_idx++) {
 		WaveGenerator* wave_gen = _wave_generators[voice_idx];
-		wave_gen->clockOscillator();
+		wave_gen->clockPhase1();
 	}
 	
 	// handle oscillator HARD SYNC (quality wise it isn't worth the trouble to
 	// use this correct impl..)
 	for (uint8_t voice_idx= 0; voice_idx<3; voice_idx++) {
 		WaveGenerator* wave_gen = _wave_generators[voice_idx];
-		wave_gen->syncOscillator();
+		wave_gen->clockPhase2();
 	}
 }
 
@@ -438,7 +438,6 @@ extern void recordPokeSID(uint32_t ts, uint8_t reg, uint8_t value);
 
 void SID::writeMem(uint16_t addr, uint8_t value) {
 	_digi->detectSample(addr, value);
-
 	_bus_write = value;
 	
 	// no reason anymore to NOT always write (unlike old/un-synced version)
@@ -463,7 +462,7 @@ void SID::writeMem(uint16_t addr, uint8_t value) {
 }
 
 void SID::clock() {
-	clockOscillators();		// for all 3 voices
+	clockWaveGenerators();		// for all 3 voices
 				
 	for (uint8_t voice_idx= 0; voice_idx<3; voice_idx++) {
 		_env_generators[voice_idx]->clockEnvelope();

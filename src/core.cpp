@@ -128,7 +128,7 @@ void runEmulation(uint8_t is_simple_sid_mode, int16_t* synth_buffer,
 				_sample_cycles++;
 			}
 			_sample_cycles -= n;	// keep overflow
-			
+
 			SYNTH_NORMAL(synth_buffer, synth_trace_bufs, scale, i);
 		}
 		copyMonoSignal(synth_buffer, samples_per_call);

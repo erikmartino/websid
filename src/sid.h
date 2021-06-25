@@ -219,7 +219,7 @@ private:
 	static void	setModels(const uint8_t* is_6581);
 	
 	void		resetEngine(uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate);
-	void		clockOscillators();
+	void		clockWaveGenerators();
 	
 protected:
 	uint8_t			_is_6581;

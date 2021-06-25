@@ -792,6 +792,7 @@ uint8_t DigiDetector::getD418Sample( uint8_t value) {
 // be sequential but that hasn't been implemented - testcase Soundcheck.sid
 // which used SAX to write WF register)
 uint8_t DigiDetector::detectSample(uint16_t addr, uint8_t value) {
+
 	if (SID::isExtMultiSidMode()) return 0;	// optimization for multi-SID
 
 	if (!_is_compatible) {

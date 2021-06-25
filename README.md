@@ -56,11 +56,29 @@ Note: Due to some bug in Apple's JavaScriptCore (as of iOS 11.4) the regularily 
 a workaround you can compile using "-s SAFE_HEAP=1". This will make for slower code but it seems to be the only way around 
 the iCrap bug.
 
+
 ## Depencencies
 
 The current version requires version 1.02 (older versions will not
 support WebAssembly) of my https://github.com/wothke/webaudio-player (use of the most recent version is recommended).
 
+
 ## License
+
 Terms of Use: This software is licensed under a CC BY-NC-SA (http://creativecommons.org/licenses/by-nc-sa/4.0/)
 	
+	
+## Sponsors
+
+At certain points there are expenses associated with this hobby project and I am grateful whenever members of the
+community step in to lend a helping hand (also see https://www.wothke.ch/websid/donate.html ). Many thanks go to the below 
+individuals that have kindly supported this project!
+
+* Laszlo Vincenzo Vincze
+* Chris Jackson
+* Joel Knepper
+* Jens-Christian Huus
+* Jani Joeli
+* Imre Olajos Jr
+* Piero Iellamo
+* AnDruid

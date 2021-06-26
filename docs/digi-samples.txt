@@ -23,7 +23,9 @@ people have also searched ways around the RAM limitation, e.g. by
 reloading data from secondary storage during playback (see 
 Wonderland XIII: https://youtu.be/bIM4p0uL6Pw?t=452 ) or by abusing 
 built-in ROM code as a sample data replacement (see 
-Acid_Flashback.sid ). 
+Acid_Flashback.sid ). One of the most impressive examples is probably 
+the "compression" approach used in Cubebase64 (see 
+https://www.youtube.com/watch?v=k4GWheE4Gkw ).
 
 
 The below will look into the different techniques that have been 

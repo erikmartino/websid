@@ -24,7 +24,7 @@ reloading data from secondary storage during playback (see
 Wonderland XIII: https://youtu.be/bIM4p0uL6Pw?t=452 ) or by abusing 
 built-in ROM code as a sample data replacement (see 
 Acid_Flashback.sid ). One of the most impressive examples is probably 
-the "compression" approach used in Cubebase64 (see 
+the "compression" approach used in Cubase64 (see 
 https://www.youtube.com/watch?v=k4GWheE4Gkw ).
 
 

@@ -104,7 +104,7 @@ int8_t DigiDetector::routeDigiSignal(Filter *filter, int32_t *digi_out,
 				break;
 			default:
 				// all the other digi techniques
-				filter->routeSignal(digi_out, outf, outo,  getSource() - 1);
+				filter->routeSignal((*digi_out), outf, outo,  getSource() - 1);
 
 				(*digi_out) >>= 1;	// scale down to match D418 signals
 				return getSource() - 1;

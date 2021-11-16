@@ -13,6 +13,8 @@
 SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernalROM, nextFrameCB) { 
 		$this.base.call(this, backend_SID.Module, 2);	// use stereo (for the benefit of multi-SID songs)
 		this.playerSampleRate;
+
+		this.cutoffSize = 1024;
 		
 		this._scopeEnabled= false;
 
@@ -192,6 +194,37 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 			this.resetDigiMeta();
 		
 			return this.Module.ccall('playTune', 'number', ['number', 'number'], [options.track, traceSID]);
+		},
+		setFilterConfig6581: function(base, max, steepness, x_offset, distort, distortOffset, distortScale, distortThreshold, kink) {
+			return this.Module.ccall('setFilterConfig6581', 'number', 
+										['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'], 
+										[base, max, steepness, x_offset, distort, distortOffset, distortScale, distortThreshold, kink]);
+		},
+		getFilterConfig6581: function() {
+			var heapPtr = this.Module.ccall('getFilterConfig6581', 'number') >> 3;	// 64-bit
+
+			var result= {
+				"base": this.Module.HEAPF64[heapPtr+0],
+				"max": this.Module.HEAPF64[heapPtr+1],
+				"steepness": this.Module.HEAPF64[heapPtr+2],
+				"x_offset": this.Module.HEAPF64[heapPtr+3],
+				"distort": this.Module.HEAPF64[heapPtr+4],
+				"distortOffset": this.Module.HEAPF64[heapPtr+5],
+				"distortScale": this.Module.HEAPF64[heapPtr+6],
+				"distortThreshold": this.Module.HEAPF64[heapPtr+7],
+				"kink": this.Module.HEAPF64[heapPtr+8],
+			};
+			return result;
+		},
+		getCutoffsLength: function() {
+			return this.cutoffSize;
+		},
+		fetchCutoffs6581: function(distortLevel, destinationArray) {
+			var heapPtr = this.Module.ccall('getCutoff6581', 'number', ['number'], [distortLevel]) >> 3;	// 64-bit
+
+			for (var i= 0; i<this.cutoffSize; i++) {
+				destinationArray[i]= this.Module.HEAPF64[heapPtr+i];
+			}
 		},
 		teardown: function() {
 			// nothing to do

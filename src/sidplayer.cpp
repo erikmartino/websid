@@ -40,7 +40,9 @@ extern "C" {
 #include "core.h"
 #include "memory.h"
 }
+#include "filter6581.h"
 #include "sid.h"
+extern "C" uint8_t	sidReadMem(uint16_t addr);
 extern "C" void 	sidWriteMem(uint16_t addr, uint8_t value);
 
 #include "loaders.h"	
@@ -398,7 +400,7 @@ extern "C" uint8_t EMSCRIPTEN_KEEPALIVE envIsNTSC() {
 
 extern "C" uint16_t getRegisterSID(uint16_t reg) __attribute__((noinline));
 extern "C" uint16_t EMSCRIPTEN_KEEPALIVE getRegisterSID(uint16_t reg) {
-	return  memReadIO(0xd400 + reg);
+	return  reg >= 0x1B ? sidReadMem(0xd400 + reg) : memReadIO(0xd400 + reg);
 }
 
 extern "C" void setRegisterSID(uint16_t reg, uint8_t value) __attribute__((noinline));
@@ -442,6 +444,23 @@ extern "C" const char** getTraceStreams() __attribute__((noinline));
 extern "C" const char** EMSCRIPTEN_KEEPALIVE getTraceStreams() {
 	return (const char**)_scope_buffers;	// ugly cast to make emscripten happy
 }
+
+extern "C" int setFilterConfig6581(double base, double max, double steepness, double x_offset, double distort, double distort_offset, double distort_scale, double distort_threshold, double kink) __attribute__((noinline));
+extern "C" int EMSCRIPTEN_KEEPALIVE setFilterConfig6581(double base, double max, double steepness, double x_offset, double distort, double distort_offset, double distort_scale, double distort_threshold, double kink) {
+	return Filter6581::setFilterConfig6581(base, max, steepness, x_offset, distort, distort_offset, distort_scale, distort_threshold, kink);
+}
+
+extern "C" double* getFilterConfig6581() __attribute__((noinline));
+extern "C" double* EMSCRIPTEN_KEEPALIVE getFilterConfig6581() {
+	return Filter6581::getFilterConfig6581();
+}
+
+extern "C" double* getCutoff6581(int slice) __attribute__((noinline));
+extern "C" double* EMSCRIPTEN_KEEPALIVE getCutoff6581(int slice) {
+	return Filter6581::getCutoff6581(slice);
+}
+
+
 
 
 // ----------- deprecated stuff that should no longer be used -----------------

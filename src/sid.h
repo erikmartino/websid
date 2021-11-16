@@ -29,7 +29,7 @@ protected:
 				uint8_t* ext_multi_sid_mode);
 				
 	static uint16_t getSidAddr(uint8_t center_byte);
-	
+		
 	friend class SID;
 private:
 	uint16_t* _addr;			// array of addresses
@@ -150,7 +150,6 @@ public:
 	*/	
 	static const char* getGlobalDigiTypeDesc();
 	
-
 	/**
 	* Resets whatever is is that might be counted.
 	*/	
@@ -192,6 +191,8 @@ protected:
 	friend DigiDetector;
 	friend WaveGenerator;
 
+	void setFilterModel(uint8_t is_6581);
+	
 	WaveGenerator* getWaveGenerator(uint8_t voice_idx);
 	
 	// API exposed to internal (SID related) components..
@@ -228,6 +229,7 @@ protected:
 	// SID model specific distortions (based on resid's analysis)
 	int32_t			_wf_zero;
 	int32_t			_dac_offset;
+    uint8_t 		 _volume;		// 4-bit master volume
 
 	DigiDetector*	_digi;
 private:
@@ -237,6 +239,10 @@ private:
 	
 	uint16_t		_addr;			// start memory address that the SID is mapped to
 	uint8_t			_dest_channel;	// which stereo channel to output to
+
+	// internal state of external filter
+	double _ext_lp_out;		// previous "low pass" output of external filter
+	double _ext_hp_out;		// previous "high pass" output of external filter	
 };
 
 #endif

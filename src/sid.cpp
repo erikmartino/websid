@@ -12,8 +12,12 @@
 *
 * Known limitations:
 *
-*  - effects of the digital-to-analog conversion (e.g. respective 6581 flaws)
-*    are NOT handled
+*  - the loudness of filtered voices seems to be too high (i.e. there should
+*    probably be more sophisticated mixing logic)
+*  - SID output is only calculated at the playback sample-rate and some of the
+*    more high-frequency effects may be lost
+*  - looking at resids physical HW modelling, there are quite a few effects 
+*    that are not handled here (non linear behavior, etc).
 *
 * Credits:
 * 
@@ -25,6 +29,8 @@
 *             "anti aliasing" for "pulse" and "saw" waveforms, and a rather
 *             neat approach to generate combined waveforms
 *             (see http://hermit.sidrip.com/jsSID.html)
+*  - Antti Lankila's 6581 distortion page provided valuable inspiration to somewhat
+*             replace the 6581 impls that I had used previously.
 *
 * Links:
 *
@@ -52,7 +58,8 @@
 
 #include "sid.h"
 #include "envelope.h"
-#include "filter.h"
+#include "filter6581.h"
+#include "filter8580.h"
 #include "digi.h"
 #include "wavegenerator.h"
 #include "memory_opt.h"
@@ -61,6 +68,37 @@ extern "C" {
 #include "base.h"
 #include "memory.h"
 };
+
+
+// Even when all the SID's voices are unfiltered, the C64's audio-output shows the kind of distortions
+// caused by single-time-constant high-pass filters (see
+// https://global.oup.com/us/companion.websites/fdscontent/uscompanion/us/static/companion.websites/9780199339136/Appendices/Appendix_E.pdf
+// - figure E.14 ). It is caused by the circuitry that post-processes the SID's output inside the C64.
+// The below is inspired by resid's analysis - though it is pretty flawed due to the fact that filtering
+// is here only performed at the slow output sample rate.
+
+//#define FREQUENCY 1000000 // // could use the real clock frequency here.. but  a fake precision here would be overkill
+#ifdef RPI4
+#define APPLY_EXTERNAL_FILTER(output, sample_rate) \
+	/* my RPi4 based device does NOT use an external filter so the respective */\
+	/* logic should be disabled when comparing respective output */\
+	;
+#else
+#define APPLY_EXTERNAL_FILTER(output, sample_rate) \
+	/* note: an earlier cycle-by-cycle loop-impl was a performance killer and seems to have been the */\
+	/* main reason why some multi-SID songs started to stutter on my old PC.. I therefore switched to */\
+	/* the below hack - accepting the flaws as a tradeoff */\
+\
+	/* cutoff: w0=1/RC  // capacitor: 1 F=1000000 uF; 1 uF= 1000000 pF (i.e. 10e-12 F) */\
+	const double cutoff_high_pass_ext = ((double)100) / _sample_rate;	/* hi-pass: R=1kOhm, C=10uF; i.e. w0=100	=> causes the "saw look" on pulse WFs*/\
+/*	const double cutoff_low_pass_ext = ((double)100000) / FREQUENCY;	// lo-pass: R=10kOhm, C=1000pF; i.e. w0=100000  .. no point at low sample rate */\
+\
+	double out = _ext_lp_out - _ext_hp_out;\
+	_ext_hp_out += cutoff_high_pass_ext * out;\
+	_ext_lp_out += (output - _ext_lp_out);\
+/*	_ext_lp_out += cutoff_low_pass_ext * (output - _ext_lp_out);*/\
+	output = out;
+#endif
 
 
 // --------- HW configuration ----------------
@@ -188,9 +226,27 @@ SID::SID() {
 	_wave_generators[0] = new WaveGenerator(this, 0);
 	_wave_generators[1] = new WaveGenerator(this, 1);
 	_wave_generators[2] = new WaveGenerator(this, 2);
-		
-	_filter = new Filter(this);
+
+	_is_6581= 1;				// force init by below
+	_filter= NULL;
+	
+	setFilterModel(0);	// default to 8580
+	
 	_digi = new DigiDetector(this);
+}
+
+void SID::setFilterModel(uint8_t is_6581) {
+	if (is_6581 != _is_6581) {
+		_is_6581 = is_6581;
+		
+		if (_filter) { delete _filter; }
+		
+		if (_is_6581) {
+			_filter = new Filter6581(this);
+		} else {
+			_filter = new Filter8580(this);
+		}
+	}
 }
 
 WaveGenerator* SID::getWaveGenerator(uint8_t voice_idx) {
@@ -216,7 +272,10 @@ void SID::resetEngine(uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate
 	}
 
 	// reset filter
-	_filter->reset(sample_rate);
+	_filter->resetSampleRate(sample_rate);
+	
+	// reset external filter
+	_ext_lp_out= _ext_hp_out= 0;
 }
 
 void SID::clockWaveGenerators() {
@@ -280,7 +339,7 @@ uint16_t SID::getBaseAddr() {
 }
 
 void SID::resetModel(uint8_t is_6581) {
-	_is_6581 = is_6581;
+	setFilterModel(is_6581);
 		
 	_bus_write = 0;
 		
@@ -295,27 +354,23 @@ void SID::resetModel(uint8_t is_6581) {
 	// a high base voltage which always provides a strong carrier signal for D418-digis.
 	
 	// The current use of signed values to represent audio signals causes a problem
-	// here, since the D481-scaling of negative numbers inverts the originally intended
+	// here, since the D418-scaling of negative numbers inverts the originally intended
 	// effect. (For the purpose of D418 output scaling, the respective input
 	// should always be positive.)
-	
-	// todo: since all calculations already use 32-bit numbers, there is enough unused
-	// range to always use positive values.. update impl accordingly and try to
-	// also ditch one(or both) of the below offsets to simplify calculations..
-	// (nobody cares if 8580 plays digis that would normally not be audible..)
-	// also recalibrate the "scope" output such that it is always centered..
 	
 	if (_is_6581) {
 		_wf_zero = -0x3800;
 		_dac_offset = 0x8000 * 0xff;
-		
-		_filter->resetInput6581(0);
 	} else {
-		_wf_zero = -0x8000;
-		_dac_offset = -0x1000 * 0xff;
+		// FIXME: below hack will cause negative "voltages" that will cause total garbage 
+		// (inverted digi output) when D418 samples are used.. correctly it should result  
+		// in "no digi" since there would just be NO voltage. cleanup respective 
+		// "output voltage level" handling-
 		
-		_filter->resetInput8580();
+		_wf_zero = -0x8000;
+		_dac_offset = -0x1000 * 0xff;		
 	}
+	_filter->reset();
 }
 
 void SID::reset(uint16_t addr, uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate,
@@ -386,9 +441,13 @@ void SID::poke(uint8_t reg, uint8_t val) {
 		case 0x15:
 		case 0x16:
 		case 0x17:
+			_filter->poke(reg, val);
+			break;
 		case 0x18:
 			_filter->poke(reg, val);
-            break;
+			
+			_volume = (val & 0xf);
+			break;
 	}
 	
     switch (reg) {
@@ -444,6 +503,19 @@ void SID::writeMem(uint16_t addr, uint8_t value) {
 	
 	const uint16_t reg = addr & 0x1f;
 #ifdef RPI4
+	// FIXME also completely suppress writes to 
+	// disabled voices so that individual voices can be analyzed more 
+	// easily using the real chip..
+
+	/*
+	if (reg == 0x18) {
+		value= ((value&0x0f)<=7) ? value : (value&0xf0) | 0x07;// XXX hack use half volume for test recordings.. 
+	}
+	if ((reg >= 7) && (reg <= 20)) {	// todo: add API to control this more
+		// XXX ignore voices 1+2
+	}
+    else */
+	
 	recordPokeSID(SYS_CYCLES(), reg, value);
 #endif
 	
@@ -479,6 +551,14 @@ void SID::clock() {
 	} \
 	*(dest)= (int16_t)final_sample
 
+	
+#define OUTPUT_SCALEDOWN ((double)1.0/90)
+
+#define APPLY_MASTERVOLUME(sample) \
+	sample *= _volume; /* fixme: volume here should always modulate some "positive voltage"! */\
+	sample *= OUTPUT_SCALEDOWN /* fixme: opt? directly combine with _volume? */;
+
+	
 void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset, double* scale, uint8_t do_clear) {
 	// generate the two output signals (filtered / non-filtered)
 	int32_t outf = 0, outo = 0;	// outf and outo here end up with the sum of 3 voices..
@@ -488,24 +568,24 @@ void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offs
 		
 		WaveGenerator* wave_gen = _wave_generators[voice_idx];
 		
-		int32_t voice_out;
+		int32_t voice_out, outv;
+		uint8_t env_out; 
 		
-		if (wave_gen->isMuted() || _filter->isSilencedVoice3(voice_idx)) {
+		bool is_muted = wave_gen->isMuted() || _filter->isSilencedVoice3(voice_idx);
+		
+		if (is_muted) {
 			voice_out = 0;
 		} else {
-			uint8_t env_out = _env_generators[voice_idx]->getOutput();
-			int32_t outv = ((wave_gen)->*(wave_gen->getOutput))(); // crappy C++ syntax for calling the "getOutput" method
-			
-			// the ideal voice_out would be signed 16-bit - but more bits are actually needed - particularily
-			// for the massively shifted 6581 signal (needed for D418 digis to work correctly)
-			
+			env_out = _env_generators[voice_idx]->getOutput();
+			outv = ((wave_gen)->*(wave_gen->getOutput))(); // crappy C++ syntax for calling the "getOutput" method
+				
 			// note: the _wf_zero ofset *always* creates some wave-output that will be modulated via the
 			// envelope (even when 0-waveform is set it will cause audible clicks and distortions in
 			// the scope views)
 			
 			voice_out = (*scale) * ( env_out * (outv + _wf_zero) + _dac_offset);
 			
-			_filter->routeSignal(&voice_out, &outf, &outo, voice_idx);	// route to either the non-filtered or filtered channel
+			_filter->routeSignal(voice_out, &outf, &outo, voice_idx);	// route to either the non-filtered or filtered channel
 		}
 		
 		
@@ -515,15 +595,14 @@ void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offs
 			// in the trace... but there is no point to slow things down with additional
 			// checks here
 			int16_t *voice_trace_buffer = synth_trace_bufs[voice_idx];
-
-			if(wave_gen->isMuted()) {
+			
+			if(is_muted) {
 				// never filter
 				*(voice_trace_buffer + offset) = voice_out;
 			} else {
-				int32_t o = 0, f = 0;	// isolated from other voices
-				uint8_t is_filtered = _filter->routeSignal(&voice_out, &f, &o, voice_idx);	// redundant.. see above
+				voice_out = (*scale) *  env_out * (outv - 0x8000);	// make sure the scope is nicely centered				
 				
-				*(voice_trace_buffer + offset) = (int16_t)_filter->simOutput(voice_idx, is_filtered, &f, &o);
+				*(voice_trace_buffer + offset) = (int16_t)_filter->simOutput(voice_idx, voice_out);
 			}			
 		}
 	}
@@ -538,13 +617,13 @@ void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offs
 			*(voice_trace_buffer + offset) = digi_out;			// save the trouble of filtering
 		} else {
 			// digi approach based on a filterable voice (that voice should be muted, i.e. can use its simOutput) 
-			int32_t o = 0, f = 0;	// isolated from other voices
-			uint8_t is_filtered = _filter->routeSignal(&digi_out, &f, &o, dvoice_idx);	// redundant.. see above
-			*(voice_trace_buffer + offset) = (int16_t)_filter->simOutput(dvoice_idx, is_filtered, &f, &o);
+			*(voice_trace_buffer + offset) = (int16_t)_filter->simOutput(dvoice_idx, digi_out);
 		}
 	}
 	
-	int32_t final_sample = _filter->getOutput(&outf, &outo, _cycles_per_sample);	// note: external filter is included here
+	int32_t final_sample = _filter->getOutput(&outf, &outo);	
+	APPLY_MASTERVOLUME(final_sample);	
+	APPLY_EXTERNAL_FILTER(final_sample, _sample_rate);	
 
 #ifdef PSID_DEBUG_ADSR
 	if (!isDebug(PSID_DEBUG_VOICE)) final_sample = 0;		// only play what is shown in debug output
@@ -571,7 +650,7 @@ void SID::synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint3
 		int32_t outv = ((wave_gen)->*(wave_gen->getOutput))(); // crappy C++ syntax for calling the "getOutput" method
 		
 		int32_t voice_out = (*scale) * ( env_out * (outv + _wf_zero) + _dac_offset);
-		_filter->routeSignal(&voice_out, &outf, &outo, voice_idx);
+		_filter->routeSignal(voice_out, &outf, &outo, voice_idx);
 		
 		// trace output (always make it 16-bit)
 		if (synth_trace_bufs) {
@@ -587,7 +666,11 @@ void SID::synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint3
 		}
 	}
 	
-	int32_t final_sample = _filter->getOutput(&outf, &outo, _cycles_per_sample);
+	int32_t final_sample = _filter->getOutput(&outf, &outo);
+
+	APPLY_MASTERVOLUME(final_sample);	
+	APPLY_EXTERNAL_FILTER(final_sample, _sample_rate);
+	
 	int16_t *dest= buffer + (offset << 1) + _dest_channel; 	// always use interleaved stereo buffer
 	
 	if (!do_clear) final_sample += *(dest);
@@ -731,6 +814,7 @@ void SID::resetAll(uint32_t sample_rate, uint32_t clock_rate, uint8_t is_rsid,
 		}
 	}
 	// setup the configured SID chips & make map where to find them
+		
 	for (uint8_t i= 0; i<_used_sids; i++) {
 		SID &sid = _sids[i];
 		sid.reset(_sid_addr[i], sample_rate, _sid_is_6581[i], clock_rate, is_rsid, is_compatible, _sid_target_chan[i]);	// stereo only used for my extended sid-file format

@@ -135,9 +135,11 @@ void SIDConfigurator::configure(uint8_t is_ext_file, uint8_t sid_file_version, u
 	(*_second_chan_idx) = 0;
 	
 	_addr[0] = 0xd400;
-	_is_6581[0] = (flags >> 4) & 0x3;
-	_is_6581[0] = !((_is_6581[0] >> 1) & 0x1); 	// only use 8580 when bit is explicitly set
 	
+	uint8_t rev = (flags >> 4) & 0x3; 	// bits selecting SID revision
+	
+	_is_6581[0] = (rev != 0x2);  // only use 8580 when bit is explicitly set as only option
+		
 	if (!is_ext_file) {	// allow max of 3 SIDs
 		(*_ext_multi_sid_mode) = false;
 	
@@ -145,13 +147,13 @@ void SIDConfigurator::configure(uint8_t is_ext_file, uint8_t sid_file_version, u
 		
 		// standard PSID maxes out at 3 sids
 		_addr[1] = getSidAddr((addr_list && (sid_file_version>2)) ? addr_list[0x0] : 0);
-		_is_6581[1] = (flags >> 6) & 0x3;
-		_is_6581[1] = !_is_6581[1] ? _is_6581[0] : !((_is_6581[1] >> 1) & 0x1);
+		rev = (flags >> 6) & 0x3;
+		_is_6581[1] = !rev ? _is_6581[0] : (rev != 0x2);
 		_target_chan[1] = 0;
 		
 		_addr[2] = getSidAddr((addr_list && (sid_file_version>3)) ? addr_list[0x1] : 0);
-		_is_6581[2] = (flags >> 8) & 0x3;
-		_is_6581[2] = !_is_6581[2] ? _is_6581[0] : !((_is_6581[2] >> 1) & 0x1);
+		rev = (flags >> 8) & 0x3;
+		_is_6581[2] = !rev ? _is_6581[0] : (rev != 0x2);
 		_target_chan[2] = 0;
 		
 		_addr[3] = 0;
@@ -176,7 +178,7 @@ void SIDConfigurator::configure(uint8_t is_ext_file, uint8_t sid_file_version, u
 			ii = i + 1;
 			
 			_addr[ii] = getSidAddr(flags2 & 0xff);
-			_is_6581[ii] = (flags2 >> 12) & 0x3;
+			
 			_target_chan[ii] = (flags2 >> 14) & 0x1;
 
 			if (!(*_second_chan_idx)) {
@@ -187,14 +189,14 @@ void SIDConfigurator::configure(uint8_t is_ext_file, uint8_t sid_file_version, u
 				}
 			}
 			
-			// default to whatever main SID is using
-			if (!_is_6581[ii]) _is_6581[ii] = _is_6581[0];
+			uint8_t rev = (flags2 >> 12) & 0x3;	// bits selecting SID revision
+			_is_6581[ii] = !rev ? _is_6581[0] : (rev != 0x2);			
 		}
 		for (; i<(MAX_SIDS-1); i++) {	// mark as unused
 			ii = i + 1;
 			
 			_addr[ii] = 0;
-			_is_6581[ii] = 0;
+			_is_6581[ii] = false;
 			_target_chan[ii] = 0;
 		}
 	}
@@ -227,16 +229,14 @@ SID::SID() {
 	_wave_generators[1] = new WaveGenerator(this, 1);
 	_wave_generators[2] = new WaveGenerator(this, 2);
 
-	_is_6581= 1;				// force init by below
-	_filter= NULL;
-	
+	_filter= NULL;	
 	setFilterModel(false);	// default to 8580
 	
 	_digi = new DigiDetector(this);
 }
 
 void SID::setFilterModel(bool is_6581) {
-	if (is_6581 != _is_6581) {
+	if (!_filter || (is_6581 != _is_6581)) {
 		_is_6581 = is_6581;
 		
 		if (_filter) { delete _filter; }
@@ -252,7 +252,6 @@ void SID::setFilterModel(bool is_6581) {
 WaveGenerator* SID::getWaveGenerator(uint8_t voice_idx) {
 	return _wave_generators[voice_idx];
 }
-
 
 void SID::resetEngine(uint32_t sample_rate, bool is_6581, uint32_t clock_rate) {
 	// note: structs are NOT packed and contain additional padding..

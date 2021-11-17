@@ -47,7 +47,7 @@ protected:
 	Filter(class SID* sid);
 	virtual ~Filter();
 		
-	virtual void resetSampleRate(uint32_t sample_rate);
+	void setSampleRate(uint32_t sample_rate);
 
 	int32_t getOutput(int32_t* in, int32_t* out);
 	int16_t simOutput(uint8_t voice_idx, int32_t voice_out);
@@ -69,7 +69,7 @@ protected:
 	/**
 	* Hooks that must be defined in subclasses.
 	*/
-	virtual void reset() = 0;
+	virtual void resyncCache() = 0;
 	virtual double doGetFilterOutput(double sum_filter_in, double sum_nofilter_in, double* band_pass, double* low_pass, double* hi_pass) = 0;
 
 private:

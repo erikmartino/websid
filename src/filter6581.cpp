@@ -80,10 +80,6 @@ double calcDistRescale(double distort_offset, double distort_scale) {
 	return w < (CUTOFF_SIZE*2) ? DIST_IDX_SCALER : DIST_IDX_SCALER *(w/(CUTOFF_SIZE*2));
 }
 
-// XXX after latest latest refactoring, the below handtuned settings suddenly sound different!!
-// check what went wrong!!! int/double issue?
-
-
 // XXX fixme; defaults tuned using 48kHz samplerate.. adjust to the actually used sample rate!
 
 // The below settings were hand-tuned using a MOS 6581 R4AR.
@@ -142,7 +138,7 @@ void Filter6581::init() {
 		Filter6581::setFilterConfig6581(_base, _max, _steepness, _x_offset, _distort, _distort_offset, _distort_scale, _distort_threshold, _kink);
 }
 
-void Filter6581::reset() {
+void Filter6581::resyncCache() {
 #ifdef USE_FILTER
 	int reg_cutoff = _reg_cutoff_lo + _reg_cutoff_hi * 8;
 	_reg_cutoff = (double)reg_cutoff;

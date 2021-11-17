@@ -22,8 +22,7 @@ protected:
 	Filter8580(class SID* sid);
 	virtual ~Filter8580();
 
-	virtual void reset();
-	virtual void resetSampleRate(uint32_t sample_rate);
+	virtual void resyncCache();
 	
 	virtual double doGetFilterOutput(double sum_filter_in, double sum_nofilter_in, double* band_pass, double* low_pass, double* hi_pass);
 

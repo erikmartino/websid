@@ -45,10 +45,12 @@ Filter::Filter(SID* sid) {
 Filter::~Filter() {
 }
 
-void Filter::resetSampleRate(uint32_t sample_rate) {
+void Filter::setSampleRate(uint32_t sample_rate) {
 	_sample_rate = sample_rate;
 
 	_lp_out = _bp_out = _hp_out = 0;
+	
+	resyncCache();	
 }
 
 /* Get the bit from an uint32_t at a specified position */
@@ -61,11 +63,11 @@ void Filter::clearSimOut(uint8_t voice_idx) {
 
 void Filter::poke(uint8_t reg, uint8_t val) {
 	switch (reg) {
-        case 0x15: { _reg_cutoff_lo = val & 0x7;	reset();  break; }
-        case 0x16: { _reg_cutoff_hi = val;			reset();  break; }
+        case 0x15: { _reg_cutoff_lo = val & 0x7;	resyncCache();  break; }
+        case 0x16: { _reg_cutoff_hi = val;			resyncCache();  break; }
         case 0x17: {
 				_reg_res_flt = val & 0xf7;	// ignore FiltEx
-				reset();
+				resyncCache();
 
 				for (uint8_t voice_idx= 0; voice_idx<3; voice_idx++) {
 					_filter_ena[voice_idx] = getBit(val, voice_idx);

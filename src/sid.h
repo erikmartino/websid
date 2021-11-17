@@ -25,20 +25,20 @@ public:
 	
 	void configure(uint8_t is_ext_file, uint8_t sid_file_version, uint16_t flags, uint8_t* addr_list);
 protected:
-	void init(uint16_t* addr, uint8_t* is_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
-				uint8_t* ext_multi_sid_mode);
+	void init(uint16_t* addr, bool* is_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
+				bool* ext_multi_sid_mode);
 				
 	static uint16_t getSidAddr(uint8_t center_byte);
 		
 	friend class SID;
 private:
 	uint16_t* _addr;			// array of addresses
-	uint8_t* _is_6581;			// array of models
+	bool* _is_6581;				// array of models
 	
 	// use of stereo:
 	uint8_t* _target_chan;		// array of used channel-idx (for stereo scenarios)
 	uint8_t* _second_chan_idx;	// single int: index of the 1st SID that maps to the 2nd stereo channel
-	uint8_t* _ext_multi_sid_mode;// single int: activates "extended sid file" handling
+	bool* _ext_multi_sid_mode;	// single int: activates "extended sid file" handling
 };
 
 
@@ -66,8 +66,8 @@ public:
 	/**
 	* Resets this instance according to the passed params.
 	*/
-	void resetModel(uint8_t is_6581);
-	void reset(uint16_t addr, uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate,
+	void resetModel(bool is_6581);
+	void reset(uint16_t addr, uint32_t sample_rate, bool is_6581, uint32_t clock_rate,
 				 uint8_t is_rsid, uint8_t is_compatible, uint8_t output_channel);
 	void resetStatistics();
 		
@@ -177,11 +177,11 @@ public:
 	// ---------- HW configuration -----------------
 	static struct SIDConfigurator* getHWConfigurator();
 	
-	static uint8_t isSID6581();
+	static bool isSID6581();
 	/**
 	* Manually override original "SID model" setting from music file.
 	*/
-	static uint8_t setSID6581(uint8_t is6581);
+	static uint8_t setSID6581(bool is_6581);
 	
 #ifdef PSID_DEBUG_ADSR
 	void debugVoice(uint8_t voice_idx);
@@ -191,7 +191,7 @@ protected:
 	friend DigiDetector;
 	friend WaveGenerator;
 
-	void setFilterModel(uint8_t is_6581);
+	void setFilterModel(bool is_6581);
 	
 	WaveGenerator* getWaveGenerator(uint8_t voice_idx);
 	
@@ -217,13 +217,13 @@ private:
 	*
 	* @param is_6581 array with one byte corresponding to each available chip
 	*/
-	static void	setModels(const uint8_t* is_6581);
+	static void	setModels(const bool* is_6581);
 	
-	void		resetEngine(uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate);
+	void		resetEngine(uint32_t sample_rate, bool is_6581, uint32_t clock_rate);
 	void		clockWaveGenerators();
 	
 protected:
-	uint8_t			_is_6581;
+	bool			_is_6581;
 	uint8_t			_bus_write;	// bus bahavior for "write only" registers
 	
 	// SID model specific distortions (based on resid's analysis)

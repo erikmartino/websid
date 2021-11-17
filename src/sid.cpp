@@ -104,16 +104,16 @@ extern "C" {
 // --------- HW configuration ----------------
 
 static uint16_t	_sid_addr[MAX_SIDS];		// start addr of SID chips (0 means NOT available)
-static uint8_t 	_sid_is_6581[MAX_SIDS];		// models of installed SID chips
+static bool 	_sid_is_6581[MAX_SIDS];		// models of installed SID chips
 static uint8_t 	_sid_target_chan[MAX_SIDS];	// output channel for the SID chips
 static uint8_t 	_sid_2nd_chan_idx;			// stereo sid-files: 1st chip using 2nd channel
-static uint8_t 	_ext_multi_sid;				// use extended multi-sid mode
+static bool 	_ext_multi_sid;				// use extended multi-sid mode
 
 SIDConfigurator::SIDConfigurator() {
 }
 
-void SIDConfigurator::init(uint16_t* addr, uint8_t* is_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
-			uint8_t* ext_multi_sid_mode) {
+void SIDConfigurator::init(uint16_t* addr, bool* is_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
+			bool* ext_multi_sid_mode) {
 	_addr = addr;
 	_is_6581 = is_6581;
 	_target_chan = target_chan;
@@ -139,7 +139,7 @@ void SIDConfigurator::configure(uint8_t is_ext_file, uint8_t sid_file_version, u
 	_is_6581[0] = !((_is_6581[0] >> 1) & 0x1); 	// only use 8580 when bit is explicitly set
 	
 	if (!is_ext_file) {	// allow max of 3 SIDs
-		(*_ext_multi_sid_mode) = 0;
+		(*_ext_multi_sid_mode) = false;
 	
 		_target_chan[0] = 0;	// no stereo support
 		
@@ -159,7 +159,7 @@ void SIDConfigurator::configure(uint8_t is_ext_file, uint8_t sid_file_version, u
 		_target_chan[3] = 0;
 		
 	} else {	// allow max of 10 SIDs
-		(*_ext_multi_sid_mode) = 1;
+		(*_ext_multi_sid_mode) = true;
 		
 		_target_chan[0] = (flags >> 6) & 0x1;
 		
@@ -230,12 +230,12 @@ SID::SID() {
 	_is_6581= 1;				// force init by below
 	_filter= NULL;
 	
-	setFilterModel(0);	// default to 8580
+	setFilterModel(false);	// default to 8580
 	
 	_digi = new DigiDetector(this);
 }
 
-void SID::setFilterModel(uint8_t is_6581) {
+void SID::setFilterModel(bool is_6581) {
 	if (is_6581 != _is_6581) {
 		_is_6581 = is_6581;
 		
@@ -254,10 +254,8 @@ WaveGenerator* SID::getWaveGenerator(uint8_t voice_idx) {
 }
 
 
-void SID::resetEngine(uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate) {
+void SID::resetEngine(uint32_t sample_rate, bool is_6581, uint32_t clock_rate) {
 	// note: structs are NOT packed and contain additional padding..
-	
-	resetModel(is_6581);
 	
 	_sample_rate = sample_rate;
 	_cycles_per_sample = ((double)clock_rate) / sample_rate;	// corresponds to Hermit's clk_ratio
@@ -272,7 +270,7 @@ void SID::resetEngine(uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate
 	}
 
 	// reset filter
-	_filter->resetSampleRate(sample_rate);
+	resetModel(is_6581);
 	
 	// reset external filter
 	_ext_lp_out= _ext_hp_out= 0;
@@ -305,15 +303,15 @@ struct SIDConfigurator* SID::getHWConfigurator() {
 	return &_hw_config;
 }
 
-uint8_t SID::isSID6581() {
+bool SID::isSID6581() {
 	return _sid_is_6581[0];		// only for the 1st chip
 }
 
-uint8_t SID::setSID6581(uint8_t is6581) {
+uint8_t SID::setSID6581(bool is_6581) {
 	// this minimal update should allow to toggle the
 	// used filter without disrupting playback in progress
 	
-	_sid_is_6581[0] = _sid_is_6581[1] = _sid_is_6581[2] = is6581;
+	_sid_is_6581[0] = _sid_is_6581[1] = _sid_is_6581[2] = is_6581;
 	SID::setModels(_sid_is_6581);
 	return 0;
 }
@@ -338,9 +336,7 @@ uint16_t SID::getBaseAddr() {
 	return _addr;
 }
 
-void SID::resetModel(uint8_t is_6581) {
-	setFilterModel(is_6581);
-		
+void SID::resetModel(bool is_6581) {
 	_bus_write = 0;
 		
 	// On the real hardware all audio outputs would result in some (positive)
@@ -370,10 +366,12 @@ void SID::resetModel(uint8_t is_6581) {
 		_wf_zero = -0x8000;
 		_dac_offset = -0x1000 * 0xff;		
 	}
-	_filter->reset();
+	
+	setFilterModel(is_6581);
+	_filter->setSampleRate(_sample_rate);
 }
 
-void SID::reset(uint16_t addr, uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate,
+void SID::reset(uint16_t addr, uint32_t sample_rate, bool is_6581, uint32_t clock_rate,
 				 uint8_t is_rsid, uint8_t is_compatible, uint8_t output_channel) {
 	
 	_addr = addr;
@@ -503,16 +501,14 @@ void SID::writeMem(uint16_t addr, uint8_t value) {
 	
 	const uint16_t reg = addr & 0x1f;
 #ifdef RPI4
-	// FIXME also completely suppress writes to 
-	// disabled voices so that individual voices can be analyzed more 
-	// easily using the real chip..
-
 	/*
 	if (reg == 0x18) {
 		value= ((value&0x0f)<=7) ? value : (value&0xf0) | 0x07;// XXX hack use half volume for test recordings.. 
 	}
+	// completely suppress writes to disabled voices so that individual voices can be analyzed more 
+	// easily using the real chip..
 	if ((reg >= 7) && (reg <= 20)) {	// todo: add API to control this more
-		// XXX ignore voices 1+2
+		// e.g. ignore voices 1+2
 	}
     else */
 	
@@ -784,7 +780,7 @@ void SID::resetGlobalStatistics() {
 	}
 }
 
-void SID::setModels(const uint8_t* is_6581) {
+void SID::setModels(const bool* is_6581) {
 	for (uint8_t i= 0; i<_used_sids; i++) {
 		SID &sid = _sids[i];
 		sid.resetModel(is_6581[i]);

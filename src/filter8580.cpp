@@ -24,16 +24,11 @@ Filter8580::Filter8580(SID* sid) : Filter(sid) {
 Filter8580::~Filter8580() {
 }
 
-void Filter8580::resetSampleRate(uint32_t sample_rate) {
-	Filter::resetSampleRate(sample_rate);
-
-	// 8580 
-   _cutoff_ratio_8580 = ((double) -2.0) * 3.1415926535897932385 * (12500.0 / 2048) / sample_rate;
-
-}
-void Filter8580::reset() {
+void Filter8580::resyncCache() {
 	// since this only depends on the sid regs, it is sufficient to update this after reg updates
 #ifdef USE_FILTER
+   _cutoff_ratio_8580 = ((double) -2.0) * 3.1415926535897932385 * (12500.0 / 2048) / _sample_rate;
+
 	// NOTE: +1 is meant to model that even a 0 cutoff will still let through some signal..
 	_cutoff = ((double)_reg_cutoff_lo) +  _reg_cutoff_hi * 8 + 1;
 

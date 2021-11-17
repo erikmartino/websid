@@ -42,7 +42,7 @@ protected:
 
 	static void init();
 
-	virtual void reset();
+	virtual void resyncCache();
 
 	virtual double doGetFilterOutput(double sum_filter_in, double sum_nofilter_in, double* band_pass, double* low_pass, double* hi_pass);
 

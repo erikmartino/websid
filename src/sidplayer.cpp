@@ -370,12 +370,12 @@ extern "C" uint32_t EMSCRIPTEN_KEEPALIVE getSampleRate() {
 
 extern "C" uint8_t envIsSID6581()  __attribute__((noinline));
 extern "C" uint8_t EMSCRIPTEN_KEEPALIVE envIsSID6581() {
-	return SID::isSID6581();
+	return (uint8_t)SID::isSID6581();
 }
 
 extern "C" uint8_t envSetSID6581(uint8_t is6581)  __attribute__((noinline));
 extern "C" uint8_t EMSCRIPTEN_KEEPALIVE envSetSID6581(uint8_t is6581) {
-	return SID::setSID6581(is6581);
+	return SID::setSID6581((bool)is6581);
 }
 
 extern "C" uint8_t getDigiType()  __attribute__((noinline));

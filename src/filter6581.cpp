@@ -171,7 +171,7 @@ double Filter6581::cutoffMultiplier(double filter_out) {
 
 	// "The FC and source mix together.." - todo: the used proportions might need some fine-tuning
 //	filter_out=((filter_out+_kinked[(int)_reg_cutoff])*0.5) - _distort_threshold;	// testcase where this makes any difference?
-	filter_out=((filter_out+_reg_cutoff)*0.5) - _distort_threshold;		
+	filter_out=((filter_out+_reg_cutoff)*0.5) - _distort_threshold;		// XXX averaging could be avoided by compensating in the other params
 	
 	// XXX FIXME: the offset used on the input that is fed to filter causes a strong "flipping" effect 
 	// that on those filters that do flip.. this may well mess up the matching used here..

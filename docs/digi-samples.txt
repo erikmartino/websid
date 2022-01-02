@@ -217,9 +217,36 @@ There are songs that switch between the above techniques.
 or use a voice specific technique on multiple voices:
 	examples: Super_Carling_the_Spider_credits.sid
 
+	
+
+long-digi
+---------
+
+The above was all about how to get the SID chip to reproduce a sequence 
+of individually recorded random audio samples. These approaches all come at
+the cost of manually updating SID registers at the speed of the intended 
+output sample rate, thus placing a considerable burden on the C64's CPU.
+
+However attempts have been made to "digitize" some recorded audio signal, but
+instead of directly using individual samples the idea is to find SID 
+settings that create an audio signal that resembles the recorded audio 
+signal during a longer interval (e.g. 10ms), and to then replay those 
+settings basically using a regular player that writes to the SID once 
+or twice every screen refresh. 
+
+As compared to individual digi-sample players, the frequency of necessary 
+SID updates is thereby reduced by about two orders of magnitude. The below 
+song is one example for this class of songs:
+
+https://deepsid.chordian.net/?file=/MUSICIANS/K/Khugiani_Naveed/Taylortest.sid
+
+It is certainly an original approach, but as compared to the original 
+recording the output audio quality usually leaves a lot to be desired.
+
+
+
 
 [Please let me know in case I missed something..] 
-
 	
 
 WebSid specifics

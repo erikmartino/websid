@@ -112,10 +112,10 @@ static bool 	_ext_multi_sid;				// use extended multi-sid mode
 SIDConfigurator::SIDConfigurator() {
 }
 
-void SIDConfigurator::init(uint16_t* addr, bool* is_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
+void SIDConfigurator::init(uint16_t* addr, bool* set_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
 			bool* ext_multi_sid_mode) {
 	_addr = addr;
-	_is_6581 = is_6581;
+	_is_6581 = set_6581;
 	_target_chan = target_chan;
 	_second_chan_idx = second_chan_idx;
 	_ext_multi_sid_mode = ext_multi_sid_mode;
@@ -235,17 +235,13 @@ SID::SID() {
 	_digi = new DigiDetector(this);
 }
 
-void SID::setFilterModel(bool is_6581) {
-	if (!_filter || (is_6581 != _is_6581)) {
-		_is_6581 = is_6581;
+void SID::setFilterModel(bool set_6581) {
+	if (!_filter || (set_6581 != _is_6581)) {
+		_is_6581 = set_6581;
 		
 		if (_filter) { delete _filter; }
 		
-		if (_is_6581) {
-			_filter = new Filter6581(this);
-		} else {
-			_filter = new Filter8580(this);
-		}
+		_filter = _is_6581 ? (Filter*)new Filter6581(this) : (Filter*)new Filter8580(this);
 	}
 }
 
@@ -253,7 +249,7 @@ WaveGenerator* SID::getWaveGenerator(uint8_t voice_idx) {
 	return _wave_generators[voice_idx];
 }
 
-void SID::resetEngine(uint32_t sample_rate, bool is_6581, uint32_t clock_rate) {
+void SID::resetEngine(uint32_t sample_rate, bool set_6581, uint32_t clock_rate) {
 	// note: structs are NOT packed and contain additional padding..
 	
 	_sample_rate = sample_rate;
@@ -269,7 +265,7 @@ void SID::resetEngine(uint32_t sample_rate, bool is_6581, uint32_t clock_rate) {
 	}
 
 	// reset filter
-	resetModel(is_6581);
+	resetModel(set_6581);
 	
 	// reset external filter
 	_ext_lp_out= _ext_hp_out= 0;
@@ -306,11 +302,11 @@ bool SID::isSID6581() {
 	return _sid_is_6581[0];		// only for the 1st chip
 }
 
-uint8_t SID::setSID6581(bool is_6581) {
+uint8_t SID::setSID6581(bool set_6581) {
 	// this minimal update should allow to toggle the
 	// used filter without disrupting playback in progress
 	
-	_sid_is_6581[0] = _sid_is_6581[1] = _sid_is_6581[2] = is_6581;
+	_sid_is_6581[0] = _sid_is_6581[1] = _sid_is_6581[2] = set_6581;
 	SID::setModels(_sid_is_6581);
 	return 0;
 }
@@ -335,7 +331,7 @@ uint16_t SID::getBaseAddr() {
 	return _addr;
 }
 
-void SID::resetModel(bool is_6581) {
+void SID::resetModel(bool set_6581) {
 	_bus_write = 0;
 		
 	// On the real hardware all audio outputs would result in some (positive)
@@ -353,7 +349,7 @@ void SID::resetModel(bool is_6581) {
 	// effect. (For the purpose of D418 output scaling, the respective input
 	// should always be positive.)
 	
-	if (_is_6581) {
+	if (set_6581) {
 		_wf_zero = -0x3800;
 		_dac_offset = 0x8000 * 0xff;
 	} else {
@@ -366,17 +362,17 @@ void SID::resetModel(bool is_6581) {
 		_dac_offset = -0x1000 * 0xff;		
 	}
 	
-	setFilterModel(is_6581);
+	setFilterModel(set_6581);
 	_filter->setSampleRate(_sample_rate);
 }
 
-void SID::reset(uint16_t addr, uint32_t sample_rate, bool is_6581, uint32_t clock_rate,
+void SID::reset(uint16_t addr, uint32_t sample_rate, bool set_6581, uint32_t clock_rate,
 				 uint8_t is_rsid, uint8_t is_compatible, uint8_t output_channel) {
 	
 	_addr = addr;
 	_dest_channel = output_channel;
 	
-	resetEngine(sample_rate, is_6581, clock_rate);
+	resetEngine(sample_rate, set_6581, clock_rate);
 		
 	_digi->reset(clock_rate, is_rsid, is_compatible);
 		
@@ -616,8 +612,19 @@ void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offs
 		}
 	}
 	
-	int32_t final_sample = _filter->getOutput(&outf, &outo);	
-	APPLY_MASTERVOLUME(final_sample);	
+	
+	int32_t final_sample;
+	
+	if(_digi->isMahoney()) {		
+		// hack: directly output the digi to avoid distortions cause by the low sample rate..
+		// testcase: Acid_Flashback.sid
+		final_sample = digi_out;
+	} else {
+		final_sample = _filter->getOutput(&outf, &outo);				
+		APPLY_MASTERVOLUME(final_sample);
+	}
+		
+	
 	APPLY_EXTERNAL_FILTER(final_sample, _sample_rate);	
 
 #ifdef PSID_DEBUG_ADSR
@@ -779,10 +786,10 @@ void SID::resetGlobalStatistics() {
 	}
 }
 
-void SID::setModels(const bool* is_6581) {
+void SID::setModels(const bool* set_6581) {
 	for (uint8_t i= 0; i<_used_sids; i++) {
 		SID &sid = _sids[i];
-		sid.resetModel(is_6581[i]);
+		sid.resetModel(set_6581[i]);
 	}
 }
 

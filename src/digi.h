@@ -54,6 +54,8 @@ protected:
 	uint8_t getSource();
 	int32_t genPsidSample(int32_t sample_in);	// legacy PSID digis
 
+	bool isMahoney();
+	
 	// detection of sample playback
 	uint8_t detectSample(uint16_t addr, uint8_t value);
 

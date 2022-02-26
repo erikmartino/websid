@@ -84,6 +84,10 @@ DigiDetector::DigiDetector(SID* sid) {
 	_is_rsid = 1;
 }
 
+bool DigiDetector::isMahoney() {
+	return _used_digi_type == DigiMahoneyD418;
+}
+
 int8_t DigiDetector::routeDigiSignal(Filter *filter, int32_t *digi_out,
 									int32_t *outf, int32_t *outo) {
 
@@ -95,12 +99,10 @@ int8_t DigiDetector::routeDigiSignal(Filter *filter, int32_t *digi_out,
 
 		switch (_used_digi_type) {
 			case DigiD418:
-				// regular D418: need no special handling since the effect is already
-				//               achieved modulating the regular voice output
-				break;
 			case DigiMahoneyD418:
-				// special handling for Mahoney's D418 approach
-				(*outo) += (*digi_out) * 2;	// make it louder
+				// D418 needs no special handling since the effect is already
+				//       achieved modulating the regular voice output
+			
 				break;
 			default:
 				// all the other digi techniques
@@ -427,7 +429,26 @@ uint8_t DigiDetector::handlePulseModulationDigi(uint8_t voice, uint8_t reg, uint
 // be lower quality due to the flaws in the filter implementation.
 // ------------------------------------------------------------------------------
 
-// from Mahoney's amplitude_table_8580.txt (respective songs usually use the new SID)
+// from Mahoney's amplitude_table_6581.txt (round((A1+0.869965)/1.863635 *255))
+static const uint8_t _mahoneySample6581[256] = {
+	119, 130, 140, 151, 161, 171, 180, 190, 202, 210, 218, 226, 234, 242, 249, 255, 
+	118, 116, 113, 110, 108, 106, 103, 101, 98, 96, 94, 93, 91, 89, 87, 86, 119, 130, 
+	140, 151, 161, 171, 180, 189, 201, 210, 218, 226, 234, 241, 248, 255, 119, 117, 
+	116, 114, 113, 112, 111, 109, 108, 107, 106, 105, 104, 103, 102, 101, 119, 128, 
+	136, 144, 153, 160, 168, 175, 185, 191, 198, 204, 211, 216, 222, 227, 118, 116, 
+	113, 110, 108, 105, 103, 101, 98, 96, 94, 92, 91, 89, 87, 86, 119, 128, 137, 145, 
+	154, 161, 169, 177, 186, 193, 200, 206, 213, 218, 224, 230, 118, 117, 115, 114, 
+	112, 111, 110, 108, 107, 105, 104, 103, 102, 101, 100, 99, 119, 119, 119, 119, 
+	119, 119, 119, 119, 120, 120, 120, 120, 120, 120, 120, 120, 118, 107, 97, 88, 
+	79, 70, 62, 54, 44, 37, 30, 24, 17, 11, 6, 0, 119, 120, 122, 123, 124, 126, 127, 
+	128, 130, 131, 132, 133, 134, 135, 136, 137, 118, 110, 102, 94, 87, 80, 74, 68, 
+	60, 54, 49, 43, 38, 33, 29, 24, 119, 118, 118, 117, 117, 116, 116, 116, 115, 115, 
+	114, 114, 114, 114, 113, 113, 118, 109, 100, 91, 83, 75, 68, 61, 52, 46, 40, 34, 
+	28, 23, 17, 12, 119, 119, 120, 121, 122, 122, 123, 123, 124, 125, 125, 126, 127, 
+	127, 128, 128, 118, 110, 103, 96, 90, 83, 77, 72, 64, 59, 54, 50, 45, 40, 36, 32
+	};
+
+// from Mahoney's amplitude_table_8580.txt
 static const uint8_t _mahoneySample[256] = {
 	164, 170, 176, 182, 188, 194, 199, 205, 212, 218, 224, 230, 236, 242, 248, 254,
 	164, 159, 153, 148, 142, 137, 132, 127, 120, 115, 110, 105, 99, 94, 89, 84,
@@ -478,12 +499,14 @@ uint8_t DigiDetector::isMahoneyDigi() {
 		if (MEM_READ_IO(_base_addr + 0x06) >= 0xfb) {	// correct SR .. might shorten the tests some..
 			_used_digi_type = DigiMahoneyD418;
 
-			// getting too loud with additional voice output (see We_Are_Demo_tune_2.sid)
-			// todo: fix emulation so that this special handling is no longer needed..
+			// using the recorded sample directly seems to lead to inferior audio
+			// quality (testcase: Eat_It) as compared to just using the regular output
+			// of the SID's voices..
+/*
 			_sid->setMute(0, 1);
 			_sid->setMute(1, 1);
 			_sid->setMute(2, 1);
-
+*/
 			return 1;
 		}
 	}
@@ -774,14 +797,12 @@ uint8_t DigiDetector::getD418Sample( uint8_t value) {
 	this offset is close to 0 and this is the reason why early songs that
 	depended on the offset alone, where barely audible on newer SID models)
 	*/
-
 	if (_used_digi_type == DigiMahoneyD418) {
 		// better turn those voices back on
 		_sid->setMute(0, 0);
 		_sid->setMute(1, 0);
 		_sid->setMute(2, 0);
 	}
-
 	_used_digi_type = DigiD418;
 
 	return (value & 0xf) * 0x11;
@@ -816,8 +837,10 @@ uint8_t DigiDetector::detectSample(uint16_t addr, uint8_t value) {
 		if (handleSwallowDigi(voice, reg, addr, value)) return 1;
 
 		// normal handling
-		if (addr == (_base_addr + 0x18)) {
-			if(assertSameSource(0)) recordSample(isMahoneyDigi() ? _mahoneySample[value] : getD418Sample(value), 0);	// this may lead to false positives..
+		if (addr == (_base_addr + 0x18)) {			
+			if(assertSameSource(0)) recordSample(isMahoneyDigi() ? 
+									(_sid->isSID6581() ? _mahoneySample6581[value] : _mahoneySample[value] )
+									: getD418Sample(value), 0);	// this may lead to false positives..
 		}
 	}
 	return 0;

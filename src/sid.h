@@ -25,7 +25,7 @@ public:
 	
 	void configure(uint8_t is_ext_file, uint8_t sid_file_version, uint16_t flags, uint8_t* addr_list);
 protected:
-	void init(uint16_t* addr, bool* is_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
+	void init(uint16_t* addr, bool* set_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
 				bool* ext_multi_sid_mode);
 				
 	static uint16_t getSidAddr(uint8_t center_byte);
@@ -66,8 +66,8 @@ public:
 	/**
 	* Resets this instance according to the passed params.
 	*/
-	void resetModel(bool is_6581);
-	void reset(uint16_t addr, uint32_t sample_rate, bool is_6581, uint32_t clock_rate,
+	void resetModel(bool set_6581);
+	void reset(uint16_t addr, uint32_t sample_rate, bool set_6581, uint32_t clock_rate,
 				 uint8_t is_rsid, uint8_t is_compatible, uint8_t output_channel);
 	void resetStatistics();
 		
@@ -181,7 +181,7 @@ public:
 	/**
 	* Manually override original "SID model" setting from music file.
 	*/
-	static uint8_t setSID6581(bool is_6581);
+	static uint8_t setSID6581(bool set_6581);
 	
 #ifdef PSID_DEBUG_ADSR
 	void debugVoice(uint8_t voice_idx);
@@ -191,7 +191,7 @@ protected:
 	friend DigiDetector;
 	friend WaveGenerator;
 
-	void setFilterModel(bool is_6581);
+	void setFilterModel(bool set_6581);
 	
 	WaveGenerator* getWaveGenerator(uint8_t voice_idx);
 	
@@ -215,11 +215,11 @@ private:
 	/**
 	* Reconfigures all used chips to the specified model.
 	*
-	* @param is_6581 array with one byte corresponding to each available chip
+	* @param set_6581 array with one byte corresponding to each available chip
 	*/
-	static void	setModels(const bool* is_6581);
+	static void	setModels(const bool* set_6581);
 	
-	void		resetEngine(uint32_t sample_rate, bool is_6581, uint32_t clock_rate);
+	void		resetEngine(uint32_t sample_rate, bool set_6581, uint32_t clock_rate);
 	void		clockWaveGenerators();
 	
 protected:

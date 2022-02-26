@@ -34,4 +34,6 @@ uint8_t		cpuGetSP();
 void		cpuPsidDebug(uint16_t play_addr);
 #endif
 
+void		cpuHackNMI(uint8_t on);
+
 #endif

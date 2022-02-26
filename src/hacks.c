@@ -4,8 +4,8 @@
 * The hacks are a means to explore the features that would be
 * needed to properly deal with the affected songs.
 *
-* All the remaining hacks address the lack of VIC sprite related
-* bad-cycle handling.
+* The remaining hacks address the lack of VIC sprite related
+* bad-cycle handling and the special case "interrupt during RTI".
 *
 * WebSid (c) 2020 Jürgen Wothke
 * version 0.94
@@ -17,6 +17,7 @@
 
 #include "memory.h"
 #include "vic.h"
+#include "cpu.h"
 
 static uint8_t (*_defaultStunFunc)(uint8_t x, uint16_t y, uint8_t cpr);
 
@@ -247,7 +248,7 @@ static void patchSynthmeldIfNeeded(uint16_t init_addr) {
 	// different CIA model .
 
 	uint8_t pattern[] = {0xEE,0x9C,0xE8,0xA9,0x07,0x10,0x3A,0xC9,0xE0,0x90,0x1F};
-	if ((init_addr == 0x0b00) && (memMatch(0xB398, pattern, 1))) {
+	if ((init_addr == 0x0b00) && (memMatch(0xB398, pattern, 11))) {
 		// it seems that the basic hardcoded play-loop is correctly timed
 		// for the regular badline handling and the problematic IRQs are
 		// probably meant to replace the some part to handle the logo-
@@ -264,7 +265,22 @@ static void patchSynthmeldIfNeeded(uint16_t init_addr) {
 	}
 }
 
+static void patchGamePlayerIfNeeded(uint16_t init_addr) {
+	// Game_Player.sid is a nice testcase for another timing flaw regarding 
+	// NMI that interrupts RTI
+	uint8_t pattern[] = {0x8D,0xD8,0x0B,0xAD,0xAE,0x21};
+	if ((init_addr == 0x0810) && (memMatch(0x0B85, pattern, 6))) {
+		cpuHackNMI(1);	// incorrect NMI behavior: prevent NMI from firing during RTI
+	}
+}
+
+
+
 void hackIfNeeded(uint16_t init_addr) {
+	cpuHackNMI(0);	// disable incorrect NMI behavior
+	
+	patchGamePlayerIfNeeded(init_addr);
+
 	patchSynthmeldIfNeeded(init_addr);
 
 	patchImmigrantSongIfNeeded(init_addr);

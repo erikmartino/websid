@@ -247,7 +247,7 @@ static uint32_t _nmi_line_ts = 0;		// for scheduling
 // the NMI line is immediately acknowledged/cleared in the same
 // cycle that the CIA sets it, the NMI handler should still be called.
 #define CHECK_FOR_NMI() \
-	if (ciaNMI()) {				/* NMI line is active now */\
+	if (ciaNMI() && (_no_nmi_hack || _no_flag_i)) {	/* NMI line is active now */\
 	\
 		/* NMI is different from IRQ in that only the transition from \
 		   high to low signal triggers an NMI, and the line has to be \
@@ -302,7 +302,7 @@ static const int32_t _opbase_write_cycle[256] = {
 	0,0,3,7,0,0,5,5,0,0,0,6,0,0,6,6,
 	4,0,0,7,0,0,4,4,0,0,0,0,0,0,5,5,
 	0,0,0,7,0,0,5,5,0,0,0,6,0,0,6,6,
-	0,0,0,7,0,0,4,4,3,0,0,0,0,0,5,5,
+	0,0,0,7,0,0,4,4,3,0,0,0,0,0,5,5,	// fixme RTI stack updates should NOT occur before 4th cycle! (but different NMI/IRQ behavior cannot be done with this simplistic model anyway)
 	0,0,0,7,0,0,5,5,0,0,0,6,0,0,6,6,
 	0,0,0,7,0,0,4,4,0,0,0,0,0,0,5,5,
 	0,0,0,7,0,0,5,5,0,0,0,6,0,0,6,6,

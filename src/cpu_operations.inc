@@ -99,6 +99,17 @@ static uint16_t _pc;					// program counter
 static uint8_t _p;						// processor status register (see above flags)
 static uint8_t _no_flag_i;				// perf opt redundancy (see _p)
 
+// testcase: Game_Player.sid - the timing/behavior of what happens when a NMI
+// interrupts a RTI is currently flawed (leading to a stack-corruption in the example song)
+// this is just a quick hack band-aid to incorrectly block NMI via via FLAG_I in this case
+static uint8_t _no_nmi_hack = 1;
+
+void cpuHackNMI(uint8_t on) {
+	_no_nmi_hack= !on;
+}
+
+
+
 static uint8_t _a, _x, _y;				// accumulator & x, y registers
 
 // stack handling (just wraps around)
@@ -1206,7 +1217,7 @@ static void runPrefetchedOp() {
             push((_pc + 1));
             uint16_t wval = memGet(_pc++);
             wval |= memGet(_pc++) << 8;
-
+		
             _pc = wval;
 
 			} break;
@@ -1404,15 +1415,28 @@ static void runPrefetchedOp() {
 					break;
 			}
 
-			// note: within the RTI's 6 cycle-interval, _p is restored
-			// in cycle #4, i.e. after that moment the FLAG_I should be clear!
-			// the execution of the logic here is times accordingly via the
-			// _exe_write_trigger
+//			RTI's 6-clock process is the reverse of the interrupt sequence. In the first clock, 
+//			the RTI (op code $40) is read. The next two clocks are used for internal operations, 
+//			the fourth for pulling the processor status off the stack, the fifth for pulling the 
+//			low return address byte off the stack, and the sixth for pulling the high return 
+//			address byte off the stack. In the very next clock, the op code at the return address 
+//			is read and the non-interrupt execution resumes.
+			
+			// note: _p is restored in cycle #4, i.e. after that moment the FLAG_I should be clear!
+			// fixme; currently _exe_write_trigger triggers *all* updates immediatley (incorrect), i.e.
+			// neither IRQ not NMI behavior is correctly covered here!
 
 			uint8_t bval = pop();	// status before the FLAG_I had been set
             _p = bval & ~(FLAG_B0 | FLAG_B1);
 			_no_flag_i = !(_p & FLAG_I);
 
+			// testcases: Game_Player and Synthmeld
+			// FIXME open issue: the RTI itself may be interrupted at any point by an NMI (which doesn't
+			// care about the FLAG_I and it can be interrupted by IRQ after the 4th cycle, i.e. once the status
+			// flag has been restored/FLAG_I cleared)!
+			// the simplistic model used here (i.e. to update the stack in one atomar operation in 4th cycle)
+			// is incorrect and probably responsible for the issues with the above 2 songs..
+			
             uint16_t wval = pop();
             wval |= pop() << 8;
 

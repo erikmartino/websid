@@ -484,31 +484,25 @@ uint8_t DigiDetector::isMahoneyDigi() {
 	// We_Are_Demo_tune_2.sid seems to be using the same approach only the
 	// SR uses 0xfb instead of 0xff
 
-	// song using this from main-loop - test-case: Acid_Flashback.sid
+	// song using this from main-loop - testcase: Acid_Flashback.sid
 
+	// testcase: 4_Non_Blondes-Whats_Up_Remix (uses 0xfe for d415/16)
+	
 	if ( (MEM_READ_IO(_base_addr + 0x17) == 0x3) && 	// voice 1&2 through filter
-		 (MEM_READ_IO(_base_addr + 0x15) == 0xff) &&
-		 (MEM_READ_IO(_base_addr + 0x16) == 0xff) &&		// correct filter cutoff
+		 (MEM_READ_IO(_base_addr + 0x15) >= 0xfe) &&
+		 (MEM_READ_IO(_base_addr + 0x16) >= 0xfe) &&		// "correct" filter cutoff
+		 
+		 (MEM_READ_IO(_base_addr + 0x06) >= 0xfb) &&
 		 (MEM_READ_IO(_base_addr + 0x06) == MEM_READ_IO(_base_addr + 0x0d)) &&
 		 (MEM_READ_IO(_base_addr + 0x06) == MEM_READ_IO(_base_addr + 0x14)) &&	// all same SR
+		 
 		 (MEM_READ_IO(_base_addr + 0x04) == 0x49) &&
 		 (MEM_READ_IO(_base_addr + 0x0b) == 0x49) &&
-		 (MEM_READ_IO(_base_addr + 0x12) == 0x49)  // correct waveform: pulse + test + gate
+		 (MEM_READ_IO(_base_addr + 0x12) == 0x49)  // correct waveform: pulse + test + gate 
 		) {
-
-		if (MEM_READ_IO(_base_addr + 0x06) >= 0xfb) {	// correct SR .. might shorten the tests some..
-			_used_digi_type = DigiMahoneyD418;
-
-			// using the recorded sample directly seems to lead to inferior audio
-			// quality (testcase: Eat_It) as compared to just using the regular output
-			// of the SID's voices..
-/*
-			_sid->setMute(0, 1);
-			_sid->setMute(1, 1);
-			_sid->setMute(2, 1);
-*/
-			return 1;
-		}
+			
+		_used_digi_type = DigiMahoneyD418;
+		return 1;
 	}
 	return 0;
 }

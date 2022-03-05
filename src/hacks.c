@@ -274,10 +274,19 @@ static void patchGamePlayerIfNeeded(uint16_t init_addr) {
 	}
 }
 
-
+static void patch4NonBlondesIfNeeded(uint16_t init_addr) {
+	// 4_Non_Blondes-Whats_Up_Remix.sid is a nice testcase for a VIC(badlines) related flaw	
+	
+	uint8_t pattern[] = {0x84,0xFD,0xA0,0x00,0xB1,0xFA};
+	if ((init_addr == 0x082E) && (memMatch(0x0903, pattern, 6))) {
+		memWriteRAM(0x0835, 0x0b);	// disable display
+	}
+}
 
 void hackIfNeeded(uint16_t init_addr) {
 	cpuHackNMI(0);	// disable incorrect NMI behavior
+	
+	patch4NonBlondesIfNeeded(init_addr);
 	
 	patchGamePlayerIfNeeded(init_addr);
 

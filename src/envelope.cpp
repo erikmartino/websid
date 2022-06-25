@@ -47,6 +47,7 @@ typedef enum {
 
 const uint16_t LFSR_LIMIT = 0x8000;
 
+
 // The ATTACK rate (0 to 0xF) determines how rapidly the output of a voice
 // rises from zero to peak amplitude when the envelope generator is gated
 // (time in ms). The respective gradient is used whether the attack is
@@ -54,17 +55,13 @@ const uint16_t LFSR_LIMIT = 0x8000;
 // times are 3x slower - implemented via additional exponential_counter)
 
 const uint16_t COUNTER_PERIOD[16] = {
-	// attack-times (in ms) that the below counter periods correspond to:
-	//	2, 8, 16, 24, 38, 56, 68, 80, 100, 240, 500, 800, 1000, 3000, 5000, 8000
-	
-	// note: an earlier impl tried to calculate the below counter-periods 
-	// directly from the attack-times (e.g. "attack/1000*1000000/256") and 
-	// eventhough the results are very similar, Commodore seems to have used some 
-	// strange rounding for some of the values that they hardcoded in the 
-	// respective SID table - to avoid potential issues the hardcoded list is
-	// therefore used here
-	
-	9, 32, 63, 95, 149, 220, 267, 313, 392, 977, 1954, 3126, 3907, 11720, 19532, 31251		  
+	// hardcoded values according to resid's analysis (Commodore seems to have used some 
+	// strange rounding for some of the values); version commited on Oct 26, 2020 seems 
+	// to break Darkchip.sid, i.e. rolled back to old impl
+//	9, 32, 63, 95, 149, 220, 267, 313, 392, 977, 1954, 3126, 3907, 11720, 19532, 31251
+
+	// original generated values derived from attack-times (see initDelays() below)
+	8, 32, 63, 95, 150, 220, 267, 314, 393, 942, 1961, 3138, 3922, 11765, 19608, 31373
 };
 
 const uint8_t EXPONENTIAL_DELAYS[256] = {
@@ -85,6 +82,45 @@ const uint8_t EXPONENTIAL_DELAYS[256] = {
 	 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
 	 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1
 };
+
+/*
+const uint16_t ATTACK_TIMES[16]  =	{
+		2, 8, 16, 24, 38, 56, 68, 80, 100, 240, 500, 800, 1000, 3000, 5000, 8000
+	};
+
+void initDelays() {
+	uint16_t i;
+	
+	fprintf(stderr, "periods: ");
+	for (i=0; i<16; i++) {
+		// counter must reach respective threshold before envelope value
+		// is incremented/decremented
+		// note: attack times are in millis & there are 255 steps for envelope..
+
+		// would be more logical if actual system clock was used here.. but
+		// probably CBM did not care to create separate NTSC/PAL SID versions
+		// and the respective limits are just hard coded.. see Egypt.sid
+		COUNTER_PERIOD[i]= floor(((double)1000000/1000)/255 * ATTACK_TIMES[i]) + 1;
+	fprintf(stderr, "%d, ", COUNTER_PERIOD[i]);
+	}
+	// lookup table for decay rates
+	uint8_t from[] =  {93, 54, 26, 14,  6,  0};
+	uint8_t val[] =   { 1,  2,  4,  8, 16, 30};
+	fprintf(stderr, "\ndelays: ");
+	for (i= 0; i<256; i++) {
+		uint8_t q= 1;
+		for (uint8_t j= 0; j<6; j++) {
+			if (i>from[j]) {
+				q= val[j];
+				break;
+			}
+		}
+		EXPONENTIAL_DELAYS[i]= q;
+	fprintf(stderr, "%d, ", EXPONENTIAL_DELAYS[i]);
+	}
+	fprintf(stderr, "\n");
+}
+*/
 
 	
 // keep state in a separate struct to avoid exposure in the header file..
@@ -116,7 +152,7 @@ Envelope::Envelope(SID* sid, uint8_t voice) {
 	_sid = sid;
 	_voice = voice;
 	_state = (void*) malloc(sizeof(struct EnvelopeState));
-	
+		
 	syncADR();
 }
 

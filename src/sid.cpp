@@ -602,12 +602,14 @@ void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offs
 	int8_t dvoice_idx = _digi->routeDigiSignal(_filter, &digi_out, &outf, &outo);
 	
 	if (synth_trace_bufs) {
-		int16_t *voice_trace_buffer = synth_trace_bufs[3];	// digi track
 		if (dvoice_idx == -1) {
-			// non-filterable digi approach
+			// only the d418 based digis should be shown in the respective "digi track" scope
+			int16_t *voice_trace_buffer = synth_trace_bufs[3];	// d418 digi scope buffer
 			*(voice_trace_buffer + offset) = digi_out;			// save the trouble of filtering
 		} else {
-			// digi approach based on a filterable voice (that voice should be muted, i.e. can use its simOutput) 
+			// digi approach based on a filterable voice (that voice might be muted, i.e. can use its simOutput)
+
+			int16_t *voice_trace_buffer = synth_trace_bufs[dvoice_idx];	// regular voice scope buffer
 			*(voice_trace_buffer + offset) = (int16_t)_filter->simOutput(dvoice_idx, digi_out);
 		}
 	}
@@ -616,7 +618,7 @@ void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offs
 	int32_t final_sample;
 	
 	if(_digi->isMahoney()) {		
-		// hack: directly output the digi to avoid distortions cause by the low sample rate..
+		// hack: directly output the digi to avoid distortions caused by the low sample rate..
 		// testcase: Acid_Flashback.sid
 		final_sample = digi_out;
 	} else {
@@ -795,6 +797,10 @@ void SID::setModels(const bool* set_6581) {
 
 uint8_t SID::getNumberUsedChips() {
 	return _used_sids;
+}
+
+uint16_t SID::getSIDBaseAddr(uint8_t idx) {
+	return idx < _used_sids ? _sid_addr[idx] : 0;
 }
 
 uint8_t SID::isAudible() {

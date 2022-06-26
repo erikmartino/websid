@@ -50,7 +50,7 @@ protected:
 	void resetCount();
 
 	// result accessors
-	int32_t getSample(); // get whatever digi-sample has last been written (as signed 16-bit)
+	int32_t getSample(); // get last D418 or PWM digi-sample (as signed 16-bit)
 	uint8_t getSource();
 	int32_t genPsidSample(int32_t sample_in);	// legacy PSID digis
 
@@ -73,9 +73,11 @@ protected:
 	const char* getTypeDesc();
 	uint16_t getRate();
 private:
-	void recordSample(uint8_t sample, uint8_t voice);
+	void recordSamplePWM(uint8_t sample, uint8_t voice_plus);
+	void recordSampleD418(uint8_t sample);
 	uint8_t assertSameSource(uint8_t voice_plus);
 	
+	uint8_t isWithinFreqDetectTimeout0(uint8_t voice);
 	uint8_t isWithinFreqDetectTimeout(uint8_t voice);
 	uint8_t recordFreqSample(uint8_t voice, uint8_t sample);
 	uint8_t handleFreqModulationDigi(uint8_t voice, uint8_t reg, uint8_t value);

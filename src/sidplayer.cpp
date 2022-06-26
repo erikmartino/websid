@@ -398,6 +398,9 @@ extern "C" uint8_t EMSCRIPTEN_KEEPALIVE envIsNTSC() {
 	return FileLoader::getNTSCMode();
 }
 
+/**
+* @deprected use getSIDRegister instead
+*/
 extern "C" uint16_t getRegisterSID(uint16_t reg) __attribute__((noinline));
 extern "C" uint16_t EMSCRIPTEN_KEEPALIVE getRegisterSID(uint16_t reg) {
 	return  reg >= 0x1B ? sidReadMem(0xd400 + reg) : memReadIO(0xd400 + reg);
@@ -434,6 +437,25 @@ extern "C" uint16_t EMSCRIPTEN_KEEPALIVE getGlobalDigiRate() {
 	uint16_t t = SID::getGlobalDigiType();
 	return (t > 0) ? SID::getGlobalDigiRate() : 0;
 }
+
+extern "C" int countSIDs() __attribute__((noinline));
+extern "C" int EMSCRIPTEN_KEEPALIVE countSIDs() {
+	return SID::getNumberUsedChips();
+}
+extern "C" int getSIDBaseAddr(uint8_t sidIdx) __attribute__((noinline));
+extern "C" int EMSCRIPTEN_KEEPALIVE getSIDBaseAddr(uint8_t sidIdx) {
+	return SID::getSIDBaseAddr(sidIdx);
+}
+extern "C" uint16_t getSIDRegister(uint8_t sidIdx, uint16_t reg) __attribute__((noinline));
+extern "C" uint16_t EMSCRIPTEN_KEEPALIVE getSIDRegister(uint8_t sidIdx, uint16_t reg) {
+	return  reg >= 0x1B ? sidReadMem(SID::getSIDBaseAddr(sidIdx) + reg) : memReadIO(SID::getSIDBaseAddr(sidIdx) + reg);
+}
+
+extern "C" void setSIDRegister(uint8_t sidIdx, uint16_t reg, uint8_t value) __attribute__((noinline));
+extern "C" void EMSCRIPTEN_KEEPALIVE setSIDRegister(uint8_t sidIdx, uint16_t reg, uint8_t value) {
+	sidWriteMem(SID::getSIDBaseAddr(sidIdx) + reg, value);
+}
+
 
 extern "C" int getNumberTraceStreams() __attribute__((noinline));
 extern "C" int EMSCRIPTEN_KEEPALIVE getNumberTraceStreams() {

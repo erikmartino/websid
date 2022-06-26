@@ -128,6 +128,10 @@ public:
 	* Total number of SID chips used in the current song.
 	*/
 	static uint8_t getNumberUsedChips();
+	/**
+	* Base address of specified SID chip.
+	*/
+	static uint16_t getSIDBaseAddr(uint8_t idx);
 		
 	/**
 	* Resets all used SID chips.

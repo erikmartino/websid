@@ -51,6 +51,9 @@ static FileLoader*	_loader;
 
 // --------- audio output buffer management ------------------------
 
+// WebAudio side processor buffer size
+static uint32_t _procBufSize = 0;
+
 // keep it down to one screen to allow for  
 // more direct feedback to WebAudio side:
 #define BUFLEN 96000/50	
@@ -83,6 +86,107 @@ static uint32_t		_trace_sid = 0;
 static uint8_t		_ready_to_play = 0;
 
 
+
+// SID register recordings: in order to allow for "sufficiently accurate" SID register visualizations, the  
+// below circular buffers are used to record SID-snapshots in 50/60Hz (i.e. 1 frame) intervals (this should be 
+// good enough for applications like DeepSid's piano-view).
+
+// hack: In order to avoid later re-shuffling/processing of this potentially unused data, the buffers used here
+// are sized to relate to respective double buffered WebAudio audio buffers: The maximum buffer size used by WebAudio 
+// is 16384 - depending on the used sample rate this would supply 0.37s (or less) od audio data, e.g.
+	// NTSC: 735*60=44100		800*60=48000  
+	// PAL: 882*50=44100		960*50=48000
+
+#define REGS2RECORD 25	// only the first 25 regs - trailing paddle regs (etc) are ignored
+#define MAX_SIDS 10		// absolute maximum currently used in the most exotic song
+
+
+static uint8_t** _sidRegSnapshots = 0;
+static uint32_t _sidSnapshotSmplCount = 0;
+static uint32_t _sidSnapshotToggle = 0;
+
+static uint16_t _sidRegSnapshotAlloc = 0;
+static uint32_t _sidRegSnapshotPos = 0;
+static uint16_t _sidRegSnapshotMax = 0;
+
+
+static void initSidRegSnapshotBuffers() {
+	_sidSnapshotSmplCount = 0;
+	
+	_sidSnapshotSmplCount += _chunk_size;
+	if (_sidSnapshotSmplCount >= _procBufSize) {
+		// the different intervals might lead to data drifting apart - try to limit that effect
+		// by resyncing to the double buffers..
+	}
+	
+	if (!_sidRegSnapshots) {
+		_sidRegSnapshots = (uint8_t**) calloc(MAX_SIDS, sizeof(uint8_t*));
+	}
+	
+	uint16_t nSnapshots = (uint16_t)ceil((float)_procBufSize / _chunk_size);	// interval different from UI's "ticks" based calcs
+	if (_sidRegSnapshotAlloc < nSnapshots) {
+		for (uint8_t i = 0; i<MAX_SIDS; i++) {
+			if (_sidRegSnapshots[i]) free(_sidRegSnapshots[i]);
+			
+			_sidRegSnapshots[i] = (uint8_t*)calloc(REGS2RECORD, nSnapshots * 2);
+		}
+		
+		_sidRegSnapshotAlloc = nSnapshots;
+	} else {
+		// just leave excess size unused
+	}
+	_sidRegSnapshotMax = nSnapshots;
+	_sidRegSnapshotPos = 0;	
+	_sidSnapshotToggle = 0;	
+}
+
+extern "C" uint16_t getSIDRegister(uint8_t sidIdx, uint16_t reg) __attribute__((noinline));
+
+static void recordSidRegSnapshot() {
+		
+	uint32_t offset = _sidRegSnapshotPos * REGS2RECORD;
+	for (uint8_t i = 0; i < SID::getNumberUsedChips(); i++) {
+		uint8_t* sidBuf = &(_sidRegSnapshots[i][offset]);
+		
+		for (uint16_t j = 0; j < REGS2RECORD; j++) {
+			sidBuf[j] = getSIDRegister(i, j);
+		}
+	}
+	
+	_sidSnapshotSmplCount+= _chunk_size;
+
+	// setup next target buffer location
+	if (_sidSnapshotSmplCount >= _procBufSize) { 
+		if (!_sidSnapshotToggle) {		
+			_sidSnapshotToggle = 1;	// switch to 2nd buffer
+			_sidRegSnapshotPos = _sidRegSnapshotMax;
+		} else {
+			_sidSnapshotToggle = 0;	// switch to 1st buffer
+			_sidRegSnapshotPos = 0;
+		}
+		_sidSnapshotSmplCount -= _procBufSize; // track overflow
+	} else {
+		_sidRegSnapshotPos++;
+	}	
+}
+
+// gets snapshot SID state relating to specified playback time
+extern "C" uint16_t getSIDRegister2(uint8_t sidIdx, uint16_t reg, uint8_t bufIdx, uint32_t tick) __attribute__((noinline));
+extern "C" uint16_t EMSCRIPTEN_KEEPALIVE getSIDRegister2(uint8_t sidIdx, uint16_t reg, uint8_t bufIdx, uint32_t tick) {
+			
+	// cached snapshots are spaced "1 frame" apart while WebAudio-side measures time in 256-sample ticks..
+	// map the respective input to the corresponding cache block (the imprecision should not be relevant
+	// for the actual use cases.. see "piano view" in DeepSid)
+	
+	uint8_t* sidBuf = &(_sidRegSnapshots[sidIdx][bufIdx ? _sidRegSnapshotMax*REGS2RECORD : 0]);
+	
+	uint32_t idx = (tick << 8) / _chunk_size;
+	
+	sidBuf += idx * REGS2RECORD;
+	
+	return sidBuf[reg];
+}
+
 static void resetTimings(uint8_t is_ntsc) {
 	vicSetModel(is_ntsc);	// see for timing details
 
@@ -97,7 +201,7 @@ static void resetScopeBuffers() {
 	if (_scope_buffers[0] == 0) {
 		// alloc once
 		for (int i= 0; i<MAX_SCOPE_BUFFERS; i++) {
-			_scope_buffers[i] = (int16_t*) calloc(sizeof(int16_t), BUFLEN);
+			_scope_buffers[i] = (int16_t*) calloc(BUFLEN, sizeof(int16_t));
 		}
 	} else {
 		for (int i= 0; i<MAX_SCOPE_BUFFERS; i++) {
@@ -159,6 +263,7 @@ static void resetSynthTraceBuffers(uint16_t size) {
 	allocSynthTraceBuffers(size);
 }
 
+
 static void resetAudioBuffers() {
 	
 	// number of samples corresponding to one simulated frame/
@@ -173,7 +278,9 @@ static void resetAudioBuffers() {
 	resetSynthTraceBuffers(_chunk_size);
 	
 	_number_of_samples_rendered = 0;
-	_number_of_samples_to_render = 0;	
+	_number_of_samples_to_render = 0;
+	
+	initSidRegSnapshotBuffers();
 }
 
 extern "C" uint8_t envSetNTSC(uint8_t is_ntsc)  __attribute__((noinline));
@@ -273,6 +380,8 @@ extern "C" int32_t EMSCRIPTEN_KEEPALIVE computeAudioSamples() {
 		} 
 	}
 	
+	recordSidRegSnapshot();
+	
 	if (_loader->isTrackEnd()) { // "play" must have been called before 1st use of this check
 		return -1;
 	}
@@ -288,11 +397,13 @@ extern "C" uint32_t EMSCRIPTEN_KEEPALIVE enableVoice(uint8_t sid_idx, uint8_t vo
 	return 0;
 }
 
-extern "C" uint32_t playTune(uint32_t selected_track, uint32_t trace_sid)  __attribute__((noinline));
-extern "C" uint32_t EMSCRIPTEN_KEEPALIVE playTune(uint32_t selected_track, uint32_t trace_sid) {
+
+extern "C" uint32_t playTune(uint32_t selected_track, uint32_t trace_sid, uint32_t procBufSize)  __attribute__((noinline));
+extern "C" uint32_t EMSCRIPTEN_KEEPALIVE playTune(uint32_t selected_track, uint32_t trace_sid, uint32_t procBufSize) {
 	_ready_to_play = 0;
 	_trace_sid = trace_sid; 
-				
+	_procBufSize = (float) procBufSize;
+	
 	_sound_started = 0;
 		
 	// note: crappy BASIC songs like Baroque_Music_64_BASIC take 100sec before
@@ -446,10 +557,12 @@ extern "C" int getSIDBaseAddr(uint8_t sidIdx) __attribute__((noinline));
 extern "C" int EMSCRIPTEN_KEEPALIVE getSIDBaseAddr(uint8_t sidIdx) {
 	return SID::getSIDBaseAddr(sidIdx);
 }
-extern "C" uint16_t getSIDRegister(uint8_t sidIdx, uint16_t reg) __attribute__((noinline));
+
+// gets the current state of the emulation
 extern "C" uint16_t EMSCRIPTEN_KEEPALIVE getSIDRegister(uint8_t sidIdx, uint16_t reg) {
 	return  reg >= 0x1B ? sidReadMem(SID::getSIDBaseAddr(sidIdx) + reg) : memReadIO(SID::getSIDBaseAddr(sidIdx) + reg);
 }
+
 
 extern "C" void setSIDRegister(uint8_t sidIdx, uint16_t reg, uint8_t value) __attribute__((noinline));
 extern "C" void EMSCRIPTEN_KEEPALIVE setSIDRegister(uint8_t sidIdx, uint16_t reg, uint8_t value) {

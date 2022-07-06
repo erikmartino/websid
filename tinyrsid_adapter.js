@@ -198,7 +198,8 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 			}
 			this.resetDigiMeta();
 		
-			return this.Module.ccall('playTune', 'number', ['number', 'number'], [options.track, traceSID]);
+			var procBufSize= ScriptNodePlayer.getInstance().getScriptProcessorBufSize();
+			return this.Module.ccall('playTune', 'number', ['number', 'number', 'number'], [options.track, traceSID, procBufSize]);
 		},
 		setFilterConfig6581: function(base, max, steepness, x_offset, distort, distortOffset, distortScale, distortThreshold, kink) {
 			return this.Module.ccall('setFilterConfig6581', 'number', 
@@ -299,15 +300,18 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 		},
 
 		/**
-		* This just queries the *current* state of the emulator. It
-		* is less precisely correlated to the music that is currently playing (than the above
-		* buffers), i.e. it represents the state *after* the last emulator call (respective data
-		* may not yet have been fed to WebAudio or if it has already been fed then 
-		* WebAudio may not yet be playing it yet). The lag should normally not be very large 
-		* (<0.2s) and when using it for display purposes it would be hard to see a difference anyway.
+		* Gets a SID's register with about ~1 frame precison - using the actual position played
+		* by the WebAudio infrastructure.
+		*
+		* prerequisite: ScriptNodePlayer must be configured with an "external ticker" for precisely timed access.
 		*/
 		getSIDRegister: function(sidIdx, reg) {
-			return this.Module.ccall('getSIDRegister', 'number', ['number', 'number'], [sidIdx, reg]);
+			
+			var p= ScriptNodePlayer.getInstance();
+			var bufIdx= p.getTickToggle();
+			var tick= p.getCurrentTick(); // playback position in currently played WebAudio buffer (in 256-samples steps)
+			
+			return this.Module.ccall('getSIDRegister2', 'number', ['number', 'number', 'number', 'number'], [sidIdx, reg, bufIdx, tick]);
 		},
 		setSIDRegister: function(sidIdx, reg, value) {
 			return this.Module.ccall('setSIDRegister', 'number', ['number', 'number', 'number'], [sidIdx, reg, value]);

@@ -389,6 +389,16 @@ uint8_t SID::peekMem(uint16_t addr) {
 	return MEM_READ_IO(addr);
 }
 
+
+
+uint8_t SID::readVoiceLevel(uint8_t voice_idx) {
+
+	WaveGenerator* wave_gen = _wave_generators[voice_idx];	
+	bool is_muted = wave_gen->isMuted() || _filter->isSilencedVoice3(voice_idx);
+
+	return is_muted ? 0 : _env_generators[voice_idx]->getOutput();
+}
+
 uint8_t SID::readMem(uint16_t addr) {
 	uint16_t offset = addr - _addr;
 	
@@ -871,6 +881,10 @@ extern "C" void sidDebug(int16_t frame_count) {	// PSID specific
 	}
 }
 #endif
+
+extern "C" uint8_t sidReadVoiceLevel(uint8_t sid_idx, uint8_t voice_idx) {
+	return _sids[sid_idx].readVoiceLevel(voice_idx);
+}
 
 extern "C" uint8_t sidReadMem(uint16_t addr) {
 	uint8_t sid_idx = _mem2sid[addr - 0xd400];

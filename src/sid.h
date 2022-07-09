@@ -84,6 +84,12 @@ public:
 	uint8_t readMem(uint16_t addr);
 	
 	/**
+	* Gets the voice specific envelope level considering additional mute-features.
+	*/
+	uint8_t readVoiceLevel(uint8_t voice_idx);
+
+	
+	/**
 	* Gets the last value actually written to this address (even for write-only regs).
 	*/
 	uint8_t peekMem(uint16_t addr);

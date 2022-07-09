@@ -313,6 +313,20 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 			
 			return this.Module.ccall('getSIDRegister2', 'number', ['number', 'number', 'number', 'number'], [sidIdx, reg, bufIdx, tick]);
 		},
+		/**
+		* Gets a specific SID voice's output level (aka envelope) with about ~1 frame precison - using the actual position played
+		* by the WebAudio infrastructure.
+		*
+		* prerequisite: ScriptNodePlayer must be configured with an "external ticker" for precisely timed access.
+		*/
+		readVoiceLevel: function(sidIdx, voiceIdx) {
+			
+			var p= ScriptNodePlayer.getInstance();
+			var bufIdx= p.getTickToggle();
+			var tick= p.getCurrentTick(); // playback position in currently played WebAudio buffer (in 256-samples steps)
+			
+			return this.Module.ccall('readVoiceLevel', 'number', ['number', 'number', 'number', 'number'], [sidIdx, voiceIdx, bufIdx, tick]);
+		},
 		setSIDRegister: function(sidIdx, reg, value) {
 			return this.Module.ccall('setSIDRegister', 'number', ['number', 'number', 'number'], [sidIdx, reg, value]);
 		},

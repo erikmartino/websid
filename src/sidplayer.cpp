@@ -44,6 +44,7 @@ extern "C" {
 #include "sid.h"
 extern "C" uint8_t	sidReadMem(uint16_t addr);
 extern "C" void 	sidWriteMem(uint16_t addr, uint8_t value);
+extern "C" uint8_t	sidReadVoiceLevel(uint8_t sid_idx, uint8_t voice_idx);
 
 #include "loaders.h"	
 
@@ -97,7 +98,7 @@ static uint8_t		_ready_to_play = 0;
 	// NTSC: 735*60=44100		800*60=48000  
 	// PAL: 882*50=44100		960*50=48000
 
-#define REGS2RECORD 25	// only the first 25 regs - trailing paddle regs (etc) are ignored
+#define REGS2RECORD (25+3)	// only the first 25 regs (trailing paddle regs (etc) are ignored) - but adding "envelope levels" of all three voices
 #define MAX_SIDS 10		// absolute maximum currently used in the most exotic song
 
 
@@ -141,6 +142,7 @@ static void initSidRegSnapshotBuffers() {
 }
 
 extern "C" uint16_t getSIDRegister(uint8_t sidIdx, uint16_t reg) __attribute__((noinline));
+extern "C" uint16_t readVoiceLevel(uint8_t sidIdx, uint8_t voiceIdx, uint8_t bufIdx, uint32_t tick) __attribute__((noinline));
 
 static void recordSidRegSnapshot() {
 		
@@ -148,9 +150,13 @@ static void recordSidRegSnapshot() {
 	for (uint8_t i = 0; i < SID::getNumberUsedChips(); i++) {
 		uint8_t* sidBuf = &(_sidRegSnapshots[i][offset]);
 		
-		for (uint16_t j = 0; j < REGS2RECORD; j++) {
+		for (uint16_t j = 0; j < REGS2RECORD-3; j++) {
 			sidBuf[j] = getSIDRegister(i, j);
 		}
+		// save "envelope" levels of all three voices 
+		sidBuf[REGS2RECORD+0] = sidReadVoiceLevel(i, 0);
+		sidBuf[REGS2RECORD+1] = sidReadVoiceLevel(i, 1);
+		sidBuf[REGS2RECORD+3] = sidReadVoiceLevel(i, 2);		
 	}
 	
 	_sidSnapshotSmplCount+= _chunk_size;
@@ -182,9 +188,22 @@ extern "C" uint16_t EMSCRIPTEN_KEEPALIVE getSIDRegister2(uint8_t sidIdx, uint16_
 	
 	uint32_t idx = (tick << 8) / _chunk_size;
 	
+	
+	if (reg < (REGS2RECORD-3)) {
+		sidBuf += idx * REGS2RECORD;
+		return sidBuf[reg];
+	} else {
+		// fallback to latest state of emulator
+		return getSIDRegister(sidIdx, reg);
+	}
+}
+
+extern "C" uint16_t EMSCRIPTEN_KEEPALIVE readVoiceLevel(uint8_t sidIdx, uint8_t voiceIdx, uint8_t bufIdx, uint32_t tick) {
+	uint8_t* sidBuf = &(_sidRegSnapshots[sidIdx][bufIdx ? _sidRegSnapshotMax*REGS2RECORD : 0]);	
+	uint32_t idx = (tick << 8) / _chunk_size;
 	sidBuf += idx * REGS2RECORD;
 	
-	return sidBuf[reg];
+	return 	sidBuf[REGS2RECORD-3 + voiceIdx];
 }
 
 static void resetTimings(uint8_t is_ntsc) {

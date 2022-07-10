@@ -98,8 +98,8 @@ static uint8_t		_ready_to_play = 0;
 	// NTSC: 735*60=44100		800*60=48000  
 	// PAL: 882*50=44100		960*50=48000
 
-#define REGS2RECORD (25+3)	// only the first 25 regs (trailing paddle regs (etc) are ignored) - but adding "envelope levels" of all three voices
-#define MAX_SIDS 10		// absolute maximum currently used in the most exotic song
+#define REGS2RECORD (25 + 3)	// only the first 25 regs (trailing paddle regs (etc) are ignored) - but adding "envelope levels" of all three voices
+#define MAX_SIDS 10				// absolute maximum currently used in the most exotic song
 
 
 static uint8_t** _sidRegSnapshots = 0;
@@ -113,23 +113,25 @@ static uint16_t _sidRegSnapshotMax = 0;
 
 static void initSidRegSnapshotBuffers() {
 	_sidSnapshotSmplCount = 0;
-	
+/*
 	_sidSnapshotSmplCount += _chunk_size;
 	if (_sidSnapshotSmplCount >= _procBufSize) {
 		// the different intervals might lead to data drifting apart - try to limit that effect
 		// by resyncing to the double buffers..
 	}
+	*/
 	
 	if (!_sidRegSnapshots) {
 		_sidRegSnapshots = (uint8_t**) calloc(MAX_SIDS, sizeof(uint8_t*));
 	}
 	
 	uint16_t nSnapshots = (uint16_t)ceil((float)_procBufSize / _chunk_size);	// interval different from UI's "ticks" based calcs
+
 	if (_sidRegSnapshotAlloc < nSnapshots) {
 		for (uint8_t i = 0; i<MAX_SIDS; i++) {
 			if (_sidRegSnapshots[i]) free(_sidRegSnapshots[i]);
 			
-			_sidRegSnapshots[i] = (uint8_t*)calloc(REGS2RECORD, nSnapshots * 2);
+			_sidRegSnapshots[i] = (uint8_t*)calloc(REGS2RECORD, nSnapshots * 2);	// double buffer the duration of WebAudio buffer
 		}
 		
 		_sidRegSnapshotAlloc = nSnapshots;
@@ -142,21 +144,20 @@ static void initSidRegSnapshotBuffers() {
 }
 
 extern "C" uint16_t getSIDRegister(uint8_t sidIdx, uint16_t reg) __attribute__((noinline));
-extern "C" uint16_t readVoiceLevel(uint8_t sidIdx, uint8_t voiceIdx, uint8_t bufIdx, uint32_t tick) __attribute__((noinline));
 
 static void recordSidRegSnapshot() {
-		
 	uint32_t offset = _sidRegSnapshotPos * REGS2RECORD;
 	for (uint8_t i = 0; i < SID::getNumberUsedChips(); i++) {
 		uint8_t* sidBuf = &(_sidRegSnapshots[i][offset]);
 		
-		for (uint16_t j = 0; j < REGS2RECORD-3; j++) {
+		uint16_t j;
+		for (j = 0; j < REGS2RECORD-3; j++) {
 			sidBuf[j] = getSIDRegister(i, j);
 		}
 		// save "envelope" levels of all three voices 
-		sidBuf[REGS2RECORD -3 +0] = sidReadVoiceLevel(i, 0);
-		sidBuf[REGS2RECORD -3 +1] = sidReadVoiceLevel(i, 1);
-		sidBuf[REGS2RECORD -3 +3] = sidReadVoiceLevel(i, 2);		
+		sidBuf[j++] = sidReadVoiceLevel(i, 0);
+		sidBuf[j++] = sidReadVoiceLevel(i, 1);
+		sidBuf[j] = sidReadVoiceLevel(i, 2);		
 	}
 	
 	_sidSnapshotSmplCount+= _chunk_size;
@@ -171,6 +172,7 @@ static void recordSidRegSnapshot() {
 			_sidRegSnapshotPos = 0;
 		}
 		_sidSnapshotSmplCount -= _procBufSize; // track overflow
+		
 	} else {
 		_sidRegSnapshotPos++;
 	}	
@@ -180,16 +182,14 @@ static void recordSidRegSnapshot() {
 extern "C" uint16_t getSIDRegister2(uint8_t sidIdx, uint16_t reg, uint8_t bufIdx, uint32_t tick) __attribute__((noinline));
 extern "C" uint16_t EMSCRIPTEN_KEEPALIVE getSIDRegister2(uint8_t sidIdx, uint16_t reg, uint8_t bufIdx, uint32_t tick) {
 			
-	// cached snapshots are spaced "1 frame" apart while WebAudio-side measures time in 256-sample ticks..
-	// map the respective input to the corresponding cache block (the imprecision should not be relevant
-	// for the actual use cases.. see "piano view" in DeepSid)
-	
-	uint8_t* sidBuf = &(_sidRegSnapshots[sidIdx][bufIdx ? _sidRegSnapshotMax*REGS2RECORD : 0]);
-	
-	uint32_t idx = (tick << 8) / _chunk_size;
-	
-	
 	if (reg < (REGS2RECORD-3)) {
+		// cached snapshots are spaced "1 frame" apart while WebAudio-side measures time in 256-sample ticks..
+		// map the respective input to the corresponding cache block (the imprecision should not be relevant
+		// for the actual use cases.. see "piano view" in DeepSid)
+	
+		uint8_t* sidBuf = &(_sidRegSnapshots[sidIdx][bufIdx ? _sidRegSnapshotMax*REGS2RECORD : 0]);	
+		uint32_t idx = (tick << 8) / _chunk_size;
+	
 		sidBuf += idx * REGS2RECORD;
 		return sidBuf[reg];
 	} else {
@@ -198,11 +198,13 @@ extern "C" uint16_t EMSCRIPTEN_KEEPALIVE getSIDRegister2(uint8_t sidIdx, uint16_
 	}
 }
 
+extern "C" uint16_t readVoiceLevel(uint8_t sidIdx, uint8_t voiceIdx, uint8_t bufIdx, uint32_t tick) __attribute__((noinline));
 extern "C" uint16_t EMSCRIPTEN_KEEPALIVE readVoiceLevel(uint8_t sidIdx, uint8_t voiceIdx, uint8_t bufIdx, uint32_t tick) {
+	
 	uint8_t* sidBuf = &(_sidRegSnapshots[sidIdx][bufIdx ? _sidRegSnapshotMax*REGS2RECORD : 0]);	
 	uint32_t idx = (tick << 8) / _chunk_size;
 	sidBuf += idx * REGS2RECORD;
-	
+		
 	return 	sidBuf[REGS2RECORD -3 + voiceIdx];
 }
 

@@ -154,9 +154,9 @@ static void recordSidRegSnapshot() {
 			sidBuf[j] = getSIDRegister(i, j);
 		}
 		// save "envelope" levels of all three voices 
-		sidBuf[REGS2RECORD+0] = sidReadVoiceLevel(i, 0);
-		sidBuf[REGS2RECORD+1] = sidReadVoiceLevel(i, 1);
-		sidBuf[REGS2RECORD+3] = sidReadVoiceLevel(i, 2);		
+		sidBuf[REGS2RECORD -3 +0] = sidReadVoiceLevel(i, 0);
+		sidBuf[REGS2RECORD -3 +1] = sidReadVoiceLevel(i, 1);
+		sidBuf[REGS2RECORD -3 +3] = sidReadVoiceLevel(i, 2);		
 	}
 	
 	_sidSnapshotSmplCount+= _chunk_size;
@@ -203,7 +203,7 @@ extern "C" uint16_t EMSCRIPTEN_KEEPALIVE readVoiceLevel(uint8_t sidIdx, uint8_t 
 	uint32_t idx = (tick << 8) / _chunk_size;
 	sidBuf += idx * REGS2RECORD;
 	
-	return 	sidBuf[REGS2RECORD-3 + voiceIdx];
+	return 	sidBuf[REGS2RECORD -3 + voiceIdx];
 }
 
 static void resetTimings(uint8_t is_ntsc) {

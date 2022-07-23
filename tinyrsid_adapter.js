@@ -32,10 +32,36 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 		this._digiShownRate= 0;
 		
 		this.resetDigiMeta();
+		
+		if (!backend_SID.Module.notReady) {
+			// in sync scenario the "onRuntimeInitialized" has already fired before execution gets here,
+			// i.e. it has to be called explicitly here (in async scenario "onRuntimeInitialized" will trigger
+			// the call directly)
+			this.doOnAdapterReady();
+		}				
 	}; 
-	// TinyRSid's sample buffer contains 2-byte (signed short) sample data 
-	// for 1 channel
 	extend(EmsHEAP16BackendAdapter, $this, {
+		doOnAdapterReady: function() {
+			// called when runtime is ready (e.g. asynchronously when WASM is loaded)
+			if (typeof this.panPerSID != 'undefined') {
+				this.initPanningCfg(this.panPerSID);
+			}			
+		},
+		initPanningCfg: function(panPerSID) {
+			// note: this might be called before the WASM is ready
+			this.panPerSID = panPerSID;
+			
+			if (!backend_SID.Module.notReady) {
+				this.Module.ccall('initPanningCfg', 'number', ['number','number','number','number','number','number','number','number','number','number'], 
+														[panPerSID[0],panPerSID[1],panPerSID[2],panPerSID[3],panPerSID[4],panPerSID[5],panPerSID[6],panPerSID[7],panPerSID[8],panPerSID[9]]);
+			}
+		},
+		getPanning: function(sidIdx) {
+			return this.Module.ccall('getPanning', 'number', ['number'], [sidIdx]);
+		},
+		setPanning: function(sidIdx, panning) {
+			this.Module.ccall('setPanning', 'number',  ['number','number'], [sidIdx, panning]);
+		},		
 		nopCB: function() {
 		},
 		resetDigiMeta: function() {

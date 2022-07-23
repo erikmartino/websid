@@ -113,8 +113,7 @@ int8_t DigiDetector::routeDigiSignal(Filter *filter, int32_t *digi_out,
 				// PWM creates annoying carrier signal and used voices are therefore
 				// muted - instead the final digi signal is directly fed back into the audio signal
 				filter->routeSignal((*digi_out), outf, outo,  getSource() - 1);
-
-			//	(*digi_out) <<= 1;	// scale up to match D418 signals
+			
 				return getSource() - 1;
 			default:
 				// do not show voice output based techniques in separate digi scope..

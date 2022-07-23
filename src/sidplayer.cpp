@@ -45,6 +45,7 @@ extern "C" {
 extern "C" uint8_t	sidReadMem(uint16_t addr);
 extern "C" void 	sidWriteMem(uint16_t addr, uint8_t value);
 extern "C" uint8_t	sidReadVoiceLevel(uint8_t sid_idx, uint8_t voice_idx);
+extern "C" void		sidSetPanning(uint8_t sid_idx, float panning);
 
 #include "loaders.h"	
 
@@ -63,6 +64,7 @@ static uint32_t _procBufSize = 0;
 static int16_t 		_soundBuffer[BUFLEN * CHANNELS];
 
 // max 10 sids*4 voices (1 digi channel)
+#define MAX_SIDS 			10					
 #define MAX_VOICES 			40					
 #define MAX_SCOPE_BUFFERS 	40
 
@@ -87,6 +89,47 @@ static uint32_t		_trace_sid = 0;
 static uint8_t		_ready_to_play = 0;
 
 
+static float 	_panning[] = {	// panning per SID (max 10 SIDs..)
+	0.7,
+	0.3,
+	0.5,
+	0.7,
+	0.3,
+	0.5,
+	0.7,
+	0.3,
+	0.5,
+	0.7,
+	};
+
+extern "C" void initPanningCfg(float p0, float p1, float p2, float p3, float p4, float p5, float p6, float p7, float p8, float p9) __attribute__((noinline));
+extern "C" void initPanningCfg(float p0, float p1, float p2, float p3, float p4, float p5, float p6, float p7, float p8, float p9) {
+	_panning[0] = p0;
+	_panning[1] = p1;
+	_panning[2] = p2;
+	_panning[3] = p3;
+	_panning[4] = p4;
+	_panning[5] = p5;
+	_panning[6] = p6;
+	_panning[7] = p7;
+	_panning[8] = p8;
+	_panning[9] = p9;
+}
+
+extern "C" float getPanning(uint8_t sid_idx) __attribute__((noinline));
+extern "C" float getPanning(uint8_t sid_idx) {
+	if (sid_idx >= 0 && sid_idx < MAX_SIDS)
+		return _panning[sid_idx];
+	return -1;
+}
+
+extern "C" void setPanning(uint8_t sid_idx, float panning) __attribute__((noinline));
+extern "C" void setPanning(uint8_t sid_idx, float panning) {
+	if (sid_idx >= 0 && sid_idx < MAX_SIDS) {
+		_panning[sid_idx]= panning;		
+		sidSetPanning(sid_idx, panning);
+	}
+}	
 
 // SID register recordings: in order to allow for "sufficiently accurate" SID register visualizations, the  
 // below circular buffers are used to record SID-snapshots in 50/60Hz (i.e. 1 frame) intervals (this should be 
@@ -447,6 +490,8 @@ extern "C" uint32_t EMSCRIPTEN_KEEPALIVE playTune(uint32_t selected_track, uint3
 	// to handle this potentially long running emu scenario (see SID callbacks 
 	// triggered on Raspberry SID device).
 	_loader->initTune(_sample_rate, selected_track);
+
+	SID::initPanning(_panning);
 
 	resetAudioBuffers();
 

@@ -36,18 +36,19 @@ b);x(b)})}if("object"!==typeof WebAssembly)return z("no native wasm support dete
 Y(g)||"function"!==typeof fetch?h(e):WebAssembly.instantiateStreaming(fetch(g,{credentials:"same-origin"}),f).then(e,function(b){z("wasm streaming compile failed: "+b);z("falling back to ArrayBuffer instantiation");h(e)});return{}}var d="tinyrsid.wast",g="tinyrsid.wasm",h="tinyrsid.temp.asm.js";Y(d)||(d=u(d));Y(g)||(g=u(g));Y(h)||(h=u(h));var f={global:null,env:null,asm2wasm:aa,parent:a},k=null;a.asmPreload=a.asm;var I=a.reallocBuffer;a.reallocBuffer=function(b){if("asmjs"===qa)var c=I(b);else a:{var d=
 a.usingWasm?65536:16777216;0<b%d&&(b+=d-b%d);d=a.buffer.byteLength;if(a.usingWasm)try{c=-1!==a.wasmMemory.grow((b-d)/65536)?a.buffer=a.wasmMemory.buffer:null;break a}catch(wa){c=null;break a}c=void 0}return c};var qa="";a.asm=function(b,c){if(!c.table){b=a.wasmTableSize;void 0===b&&(b=1024);var d=a.wasmMaxTableSize;c.table="object"===typeof WebAssembly&&"function"===typeof WebAssembly.Table?void 0!==d?new WebAssembly.Table({initial:b,maximum:d,element:"anyfunc"}):new WebAssembly.Table({initial:b,
 element:"anyfunc"}):Array(b);a.wasmTable=c.table}c.memoryBase||(c.memoryBase=a.STATIC_BASE);c.tableBase||(c.tableBase=0);c=e(c);assert(c,"no binaryen method succeeded.");return c}})();
-var ma=[function(){console.log("info cannot be retrieved  from corrupt .mus file")},function(){console.log("FATAL ERROR: This BASIC song requires emulator to be configured with optional KERNAL ROM and BASIC ROM")},function(){console.log("FATAL ERROR: no free memory for driver")},function(){console.log("ERROR: PSID INIT hangs")},function(b){console.log("JAM 0:  $"+b.toString(16))}];L=1024;M=L+2347328;ha.push({b:function(){na()}},{b:function(){ra()}});a.STATIC_BASE=L;a.STATIC_BUMP=2347328;M+=16;
+var ma=[function(){console.log("info cannot be retrieved  from corrupt .mus file")},function(){console.log("FATAL ERROR: This BASIC song requires emulator to be configured with optional KERNAL ROM and BASIC ROM")},function(){console.log("FATAL ERROR: no free memory for driver")},function(){console.log("ERROR: PSID INIT hangs")},function(b){console.log("JAM 0:  $"+b.toString(16))}];L=1024;M=L+2347472;ha.push({b:function(){na()}},{b:function(){ra()}});a.STATIC_BASE=L;a.STATIC_BUMP=2347472;M+=16;
 function sa(b){return Math.pow(2,b)}var ta=M;M=M+4+15&-16;R=ta;N=O=A(M);P=N+T;Q=A(P);K[R>>2]=Q;a.wasmTableSize=64;a.wasmMaxTableSize=64;a.c={};
 a.f={abort:x,enlargeMemory:function(){ea()},getTotalMemory:function(){return S},abortOnCannotGrowMemory:ea,___cxa_pure_virtual:function(){B=!0;throw"Pure virtual function called!";},___setErrNo:function(b){a.___errno_location&&(K[a.___errno_location()>>2]=b);return b},_emscripten_asm_const_i:function(b){return ma[b]()},_emscripten_asm_const_ii:function(b,c){return ma[b](c)},_emscripten_memcpy_big:function(b,c,e){G.set(G.subarray(c,c+e),b);return b},_llvm_exp2_f64:function(){return sa.apply(null,arguments)},
 _llvm_trap:function(){x("trap!")},DYNAMICTOP_PTR:R,STACKTOP:O};var ua=a.asm(a.c,a.f,buffer);a.asm=ua;var ra=a.__GLOBAL__sub_I_sid_cpp=function(){return a.asm.__GLOBAL__sub_I_sid_cpp.apply(null,arguments)},na=a.__GLOBAL__sub_I_wavegenerator_cpp=function(){return a.asm.__GLOBAL__sub_I_wavegenerator_cpp.apply(null,arguments)};a._computeAudioSamples=function(){return a.asm._computeAudioSamples.apply(null,arguments)};a._countSIDs=function(){return a.asm._countSIDs.apply(null,arguments)};
 a._enableVoice=function(){return a.asm._enableVoice.apply(null,arguments)};a._enableVoices=function(){return a.asm._enableVoices.apply(null,arguments)};a._envIsNTSC=function(){return a.asm._envIsNTSC.apply(null,arguments)};a._envIsSID6581=function(){return a.asm._envIsSID6581.apply(null,arguments)};a._envSetNTSC=function(){return a.asm._envSetNTSC.apply(null,arguments)};a._envSetSID6581=function(){return a.asm._envSetSID6581.apply(null,arguments)};
 a._free=function(){return a.asm._free.apply(null,arguments)};a._getBufferVoice1=function(){return a.asm._getBufferVoice1.apply(null,arguments)};a._getBufferVoice2=function(){return a.asm._getBufferVoice2.apply(null,arguments)};a._getBufferVoice3=function(){return a.asm._getBufferVoice3.apply(null,arguments)};a._getBufferVoice4=function(){return a.asm._getBufferVoice4.apply(null,arguments)};a._getCutoff6581=function(){return a.asm._getCutoff6581.apply(null,arguments)};
 a._getDigiRate=function(){return a.asm._getDigiRate.apply(null,arguments)};a._getDigiType=function(){return a.asm._getDigiType.apply(null,arguments)};a._getDigiTypeDesc=function(){return a.asm._getDigiTypeDesc.apply(null,arguments)};a._getFilterConfig6581=function(){return a.asm._getFilterConfig6581.apply(null,arguments)};a._getGlobalDigiRate=function(){return a.asm._getGlobalDigiRate.apply(null,arguments)};a._getGlobalDigiType=function(){return a.asm._getGlobalDigiType.apply(null,arguments)};
-a._getGlobalDigiTypeDesc=function(){return a.asm._getGlobalDigiTypeDesc.apply(null,arguments)};a._getMusicInfo=function(){return a.asm._getMusicInfo.apply(null,arguments)};a._getNumberTraceStreams=function(){return a.asm._getNumberTraceStreams.apply(null,arguments)};a._getRAM=function(){return a.asm._getRAM.apply(null,arguments)};a._getRegisterSID=function(){return a.asm._getRegisterSID.apply(null,arguments)};a._getSIDBaseAddr=function(){return a.asm._getSIDBaseAddr.apply(null,arguments)};
-a._getSIDRegister=function(){return a.asm._getSIDRegister.apply(null,arguments)};a._getSIDRegister2=function(){return a.asm._getSIDRegister2.apply(null,arguments)};a._getSampleRate=function(){return a.asm._getSampleRate.apply(null,arguments)};a._getSoundBuffer=function(){return a.asm._getSoundBuffer.apply(null,arguments)};a._getSoundBufferLen=function(){return a.asm._getSoundBufferLen.apply(null,arguments)};a._getTraceStreams=function(){return a.asm._getTraceStreams.apply(null,arguments)};
-a._loadSidFile=function(){return a.asm._loadSidFile.apply(null,arguments)};a._malloc=function(){return a.asm._malloc.apply(null,arguments)};a._playTune=function(){return a.asm._playTune.apply(null,arguments)};a._readVoiceLevel=function(){return a.asm._readVoiceLevel.apply(null,arguments)};a._setFilterConfig6581=function(){return a.asm._setFilterConfig6581.apply(null,arguments)};a._setRAM=function(){return a.asm._setRAM.apply(null,arguments)};
-a._setRegisterSID=function(){return a.asm._setRegisterSID.apply(null,arguments)};a._setSIDRegister=function(){return a.asm._setSIDRegister.apply(null,arguments)};var E=a.stackAlloc=function(){return a.asm.stackAlloc.apply(null,arguments)},D=a.stackRestore=function(){return a.asm.stackRestore.apply(null,arguments)},C=a.stackSave=function(){return a.asm.stackSave.apply(null,arguments)};a.dynCall_v=function(){return a.asm.dynCall_v.apply(null,arguments)};
-a.dynCall_vi=function(){return a.asm.dynCall_vi.apply(null,arguments)};a.asm=ua;a.ccall=function(b,c,e,d){var g=a["_"+b];assert(g,"Cannot call unknown function "+b+", make sure it is exported");var h=[];b=0;if(d)for(var f=0;f<d.length;f++){var k=ba[e[f]];k?(0===b&&(b=C()),h[f]=k(d[f])):h[f]=d[f]}e=g.apply(null,h);e="string"===c?ca(e):"boolean"===c?!!e:e;0!==b&&D(b);return e};X=function va(){a.calledRun||Z();a.calledRun||(X=va)};
+a._getGlobalDigiTypeDesc=function(){return a.asm._getGlobalDigiTypeDesc.apply(null,arguments)};a._getMusicInfo=function(){return a.asm._getMusicInfo.apply(null,arguments)};a._getNumberTraceStreams=function(){return a.asm._getNumberTraceStreams.apply(null,arguments)};a._getPanning=function(){return a.asm._getPanning.apply(null,arguments)};a._getRAM=function(){return a.asm._getRAM.apply(null,arguments)};a._getRegisterSID=function(){return a.asm._getRegisterSID.apply(null,arguments)};
+a._getSIDBaseAddr=function(){return a.asm._getSIDBaseAddr.apply(null,arguments)};a._getSIDRegister=function(){return a.asm._getSIDRegister.apply(null,arguments)};a._getSIDRegister2=function(){return a.asm._getSIDRegister2.apply(null,arguments)};a._getSampleRate=function(){return a.asm._getSampleRate.apply(null,arguments)};a._getSoundBuffer=function(){return a.asm._getSoundBuffer.apply(null,arguments)};a._getSoundBufferLen=function(){return a.asm._getSoundBufferLen.apply(null,arguments)};
+a._getTraceStreams=function(){return a.asm._getTraceStreams.apply(null,arguments)};a._initPanningCfg=function(){return a.asm._initPanningCfg.apply(null,arguments)};a._loadSidFile=function(){return a.asm._loadSidFile.apply(null,arguments)};a._malloc=function(){return a.asm._malloc.apply(null,arguments)};a._playTune=function(){return a.asm._playTune.apply(null,arguments)};a._readVoiceLevel=function(){return a.asm._readVoiceLevel.apply(null,arguments)};
+a._setFilterConfig6581=function(){return a.asm._setFilterConfig6581.apply(null,arguments)};a._setPanning=function(){return a.asm._setPanning.apply(null,arguments)};a._setRAM=function(){return a.asm._setRAM.apply(null,arguments)};a._setRegisterSID=function(){return a.asm._setRegisterSID.apply(null,arguments)};a._setSIDRegister=function(){return a.asm._setSIDRegister.apply(null,arguments)};
+var E=a.stackAlloc=function(){return a.asm.stackAlloc.apply(null,arguments)},D=a.stackRestore=function(){return a.asm.stackRestore.apply(null,arguments)},C=a.stackSave=function(){return a.asm.stackSave.apply(null,arguments)};a.dynCall_v=function(){return a.asm.dynCall_v.apply(null,arguments)};a.dynCall_vi=function(){return a.asm.dynCall_vi.apply(null,arguments)};a.asm=ua;
+a.ccall=function(b,c,e,d){var g=a["_"+b];assert(g,"Cannot call unknown function "+b+", make sure it is exported");var h=[];b=0;if(d)for(var f=0;f<d.length;f++){var k=ba[e[f]];k?(0===b&&(b=C()),h[f]=k(d[f])):h[f]=d[f]}e=g.apply(null,h);e="string"===c?ca(e):"boolean"===c?!!e:e;0!==b&&D(b);return e};X=function va(){a.calledRun||Z();a.calledRun||(X=va)};
 function Z(){function b(){if(!a.calledRun&&(a.calledRun=!0,!B)){ka||(ka=!0,U(ha));U(ia);if(a.onRuntimeInitialized)a.onRuntimeInitialized();if(a.postRun)for("function"==typeof a.postRun&&(a.postRun=[a.postRun]);a.postRun.length;){var b=a.postRun.shift();ja.unshift(b)}U(ja)}}if(!(0<V)){if(a.preRun)for("function"==typeof a.preRun&&(a.preRun=[a.preRun]);a.preRun.length;)la();U(fa);0<V||a.calledRun||(a.setStatus?(a.setStatus("Running..."),setTimeout(function(){setTimeout(function(){a.setStatus("")},1);
 b()},1)):b())}}a.run=Z;function x(b){if(a.onAbort)a.onAbort(b);void 0!==b?(y(b),z(b),b=JSON.stringify(b)):b="";B=!0;throw"abort("+b+"). Build with -s ASSERTIONS=1 for more info.";}a.abort=x;if(a.preInit)for("function"==typeof a.preInit&&(a.preInit=[a.preInit]);0<a.preInit.length;)a.preInit.pop()();a.noExitRuntime=!0;Z();
   return {
@@ -88,10 +89,36 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 		this._digiShownRate= 0;
 		
 		this.resetDigiMeta();
+		
+		if (!backend_SID.Module.notReady) {
+			// in sync scenario the "onRuntimeInitialized" has already fired before execution gets here,
+			// i.e. it has to be called explicitly here (in async scenario "onRuntimeInitialized" will trigger
+			// the call directly)
+			this.doOnAdapterReady();
+		}				
 	}; 
-	// TinyRSid's sample buffer contains 2-byte (signed short) sample data 
-	// for 1 channel
 	extend(EmsHEAP16BackendAdapter, $this, {
+		doOnAdapterReady: function() {
+			// called when runtime is ready (e.g. asynchronously when WASM is loaded)
+			if (typeof this.panPerSID != 'undefined') {
+				this.initPanningCfg(this.panPerSID);
+			}			
+		},
+		initPanningCfg: function(panPerSID) {
+			// note: this might be called before the WASM is ready
+			this.panPerSID = panPerSID;
+			
+			if (!backend_SID.Module.notReady) {
+				this.Module.ccall('initPanningCfg', 'number', ['number','number','number','number','number','number','number','number','number','number'], 
+														[panPerSID[0],panPerSID[1],panPerSID[2],panPerSID[3],panPerSID[4],panPerSID[5],panPerSID[6],panPerSID[7],panPerSID[8],panPerSID[9]]);
+			}
+		},
+		getPanning: function(sidIdx) {
+			return this.Module.ccall('getPanning', 'number', ['number'], [sidIdx]);
+		},
+		setPanning: function(sidIdx, panning) {
+			this.Module.ccall('setPanning', 'number',  ['number','number'], [sidIdx, panning]);
+		},		
 		nopCB: function() {
 		},
 		resetDigiMeta: function() {

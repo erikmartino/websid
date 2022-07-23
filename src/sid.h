@@ -68,7 +68,7 @@ public:
 	*/
 	void resetModel(bool set_6581);
 	void reset(uint16_t addr, uint32_t sample_rate, bool set_6581, uint32_t clock_rate,
-				 uint8_t is_rsid, uint8_t is_compatible, uint8_t output_channel);
+				 uint8_t is_rsid, uint8_t is_compatible);
 	void resetStatistics();
 		
 	/**
@@ -105,13 +105,18 @@ public:
 	uint8_t isModel6581();
 	
 	/**
-	* Generates sample output data based on the current SID state.
+	* Generates audio output data based on the current SID state.
 	* 
 	* @param synth_trace_bufs when used it must be an array[4] containing
 	*                       buffers of at least length "offset"
 	*/		
-	void synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset, double* scale, uint8_t do_clear);
-	void synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset, double* scale, uint8_t do_clear);
+	int32_t synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+	
+	/**
+	* Stripped down (for performance) version of above synthSample.
+	*/
+	int32_t synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+
 
 	/**
 	* Clocks this instance by one system cycle.
@@ -124,11 +129,6 @@ public:
 	* Measures the length if one sample in system cycles.
 	*/
 	static double getCyclesPerSample();
-
-	/**
-	* Rescaling that should be used on the output signal (depending on the used number of SID chips).
-	*/
-	static double getScale();
 
 	/**
 	* Total number of SID chips used in the current song.
@@ -144,6 +144,16 @@ public:
 	*/
 	static void resetAll(uint32_t sample_rate, uint32_t clock_rate, uint8_t is_rsid,
 							uint8_t is_compatible);
+
+	/**
+	* Sets the pannnig for all SIDs.
+	*/
+	static void initPanning(float *panPerSID);
+
+	/**
+	* Sets the panning for this SID.
+	*/
+	void setPanning(float panning);
 
 	/**
 	* Clock all used SID chips.
@@ -180,8 +190,9 @@ public:
 	/**
 	* Renders the combined output of all currently used SIDs.
 	*/
-	static void	synthSample(int16_t* buffer, int16_t** synth_trace_bufs, double* scale, uint32_t offset);
-	static void	synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, double* scale, uint32_t offset);
+	static void	synthMonoSamples(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+	static void synthStereoSamples(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+	static void	synthStereoSamples2(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
 
 	
 	// ---------- HW configuration -----------------
@@ -241,6 +252,9 @@ protected:
 	int32_t			_dac_offset;
     uint8_t 		 _volume;		// 4-bit master volume
 
+	float			_pan_left;		// not used for ext-multi-SID mode..
+	float			_pan_right;
+	
 	DigiDetector*	_digi;
 private:
 	WaveGenerator*	_wave_generators[3];
@@ -248,7 +262,6 @@ private:
 	Filter*			_filter;
 	
 	uint16_t		_addr;			// start memory address that the SID is mapped to
-	uint8_t			_dest_channel;	// which stereo channel to output to
 
 	// internal state of external filter
 	double _ext_lp_out;		// previous "low pass" output of external filter

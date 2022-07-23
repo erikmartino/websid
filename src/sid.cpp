@@ -105,9 +105,14 @@ extern "C" {
 
 static uint16_t	_sid_addr[MAX_SIDS];		// start addr of SID chips (0 means NOT available)
 static bool 	_sid_is_6581[MAX_SIDS];		// models of installed SID chips
+
+
+static bool 	_ext_multi_sid;				// use extended multi-sid mode
+
+	// fixme: the original "ext multi-sid" stereo channel assignment has been replaced by the added 
+	// regular stereo-panning - remove the below remainders of the old impl
 static uint8_t 	_sid_target_chan[MAX_SIDS];	// output channel for the SID chips
 static uint8_t 	_sid_2nd_chan_idx;			// stereo sid-files: 1st chip using 2nd channel
-static bool 	_ext_multi_sid;				// use extended multi-sid mode
 
 SIDConfigurator::SIDConfigurator() {
 }
@@ -317,15 +322,9 @@ uint8_t SID::setSID6581(bool set_6581) {
 // work (without any rescaling). but for now I'll use Hermit's settings - this
 // will make for a better user experience in DeepSID when switching players..
 
-// todo: only designed for even number of SIDs.. if there actually are 3SID
-// (etc) stereo songs then something more sophisticated would be needed...
-
-static double _vol_map[] = { 1.0f, 0.6f, 0.4f, 0.3f, 0.3f, 0.3f, 0.3f, 0.3f };
+static double _vol_map[] = { 1.0f, 0.6f, 0.4f, 0.3f, 0.3f, 0.3f, 0.3f, 0.3f, 0.3f, 0.3f };
 static double _vol_scale;
 
-double SID::getScale() {
-	return _vol_scale;
-}
 
 uint16_t SID::getBaseAddr() {
 	return _addr;
@@ -367,10 +366,9 @@ void SID::resetModel(bool set_6581) {
 }
 
 void SID::reset(uint16_t addr, uint32_t sample_rate, bool set_6581, uint32_t clock_rate,
-				 uint8_t is_rsid, uint8_t is_compatible, uint8_t output_channel) {
+				 uint8_t is_rsid, uint8_t is_compatible) {
 	
 	_addr = addr;
-	_dest_channel = output_channel;
 	
 	resetEngine(sample_rate, set_6581, clock_rate);
 		
@@ -542,13 +540,14 @@ void SID::clock() {
 	}
 }
 
+const int32_t _clip_value = 32767;
+
 // clipping (filter, multi-SID as well as PSID digi may bring output over the edge)
 #define RENDER_CLIPPED(dest, final_sample) \
-	const int32_t clip_value = 32767; \
-	if ( final_sample < -clip_value ) { \
-		final_sample = -clip_value; \
-	} else if ( final_sample > clip_value ) { \
-		final_sample = clip_value; \
+	if ( final_sample < -_clip_value ) { \
+		final_sample = -_clip_value; \
+	} else if ( final_sample > _clip_value ) { \
+		final_sample = _clip_value; \
 	} \
 	*(dest)= (int16_t)final_sample
 
@@ -559,8 +558,8 @@ void SID::clock() {
 	sample *= _volume; /* fixme: volume here should always modulate some "positive voltage"! */\
 	sample *= OUTPUT_SCALEDOWN /* fixme: opt? directly combine with _volume? */;
 
-	
-void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset, double* scale, uint8_t do_clear) {
+
+int32_t SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset) {
 	// generate the two output signals (filtered / non-filtered)
 	int32_t outf = 0, outo = 0;	// outf and outo here end up with the sum of 3 voices..
 			
@@ -583,8 +582,8 @@ void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offs
 			// note: the _wf_zero ofset *always* creates some wave-output that will be modulated via the
 			// envelope (even when 0-waveform is set it will cause audible clicks and distortions in
 			// the scope views)
-			
-			voice_out = (*scale) * ( env_out * (outv + _wf_zero) + _dac_offset);
+						
+			voice_out = _vol_scale * ( env_out * (outv + _wf_zero) + _dac_offset);
 			
 			_filter->routeSignal(voice_out, &outf, &outo, voice_idx);	// route to either the non-filtered or filtered channel
 		}
@@ -601,7 +600,8 @@ void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offs
 				// never filter
 				*(voice_trace_buffer + offset) = voice_out;
 			} else {
-				voice_out = (*scale) *  env_out * (outv - 0x8000);	// make sure the scope is nicely centered				
+				// the ">>8" should correctly be "/255" - but the fester but incorrect impl should be adequate here
+				voice_out = env_out * (outv - 0x8000) >> 8;	// make sure the scope is nicely centered				
 				
 				*(voice_trace_buffer + offset) = (int16_t)_filter->simOutput(voice_idx, voice_out);
 			}			
@@ -630,6 +630,7 @@ void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offs
 	if(_digi->isMahoney()) {		
 		// hack: directly output the digi to avoid distortions caused by the low sample rate..
 		// testcase: Acid_Flashback.sid
+		
 		final_sample = digi_out;
 	} else {
 		final_sample = _filter->getOutput(&outf, &outo);				
@@ -645,16 +646,14 @@ void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offs
 	
 	final_sample = _digi->genPsidSample(final_sample);		// recorded PSID digis are merged in directly
 
-	int16_t *dest = buffer + (offset << 1) + _dest_channel; 	// always use interleaved stereo buffer
 	
-	if (!do_clear) final_sample += *(dest);
-
-	RENDER_CLIPPED(dest, final_sample);
+	return final_sample;
 }
 
 // same as above but without digi & no filter for trace buffers - once faster
 // PCs are more widely in use, then this optimization may be ditched..
-void SID::synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset, double* scale, uint8_t do_clear) {
+
+int32_t SID::synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset) {
 	int32_t outf = 0, outo = 0;	// outf and outo here end up with the sum of 3 voices..
 	
 	for (uint8_t voice_idx= 0; voice_idx<3; voice_idx++) {
@@ -663,7 +662,7 @@ void SID::synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint3
 		WaveGenerator *wave_gen= _wave_generators[voice_idx];
 		int32_t outv = ((wave_gen)->*(wave_gen->getOutput))(); // crappy C++ syntax for calling the "getOutput" method
 		
-		int32_t voice_out = (*scale) * ( env_out * (outv + _wf_zero) + _dac_offset);
+		int32_t voice_out = _vol_scale * ( env_out * (outv + _wf_zero) + _dac_offset);
 		_filter->routeSignal(voice_out, &outf, &outo, voice_idx);
 		
 		// trace output (always make it 16-bit)
@@ -676,7 +675,7 @@ void SID::synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint3
 			// my old machine
 			
 			int16_t *voice_trace_buffer = synth_trace_bufs[voice_idx];
-			*(voice_trace_buffer + offset) = (int16_t)(voice_out);
+			*(voice_trace_buffer + offset) = env_out * (outv - 0x8000) >> 8;	// make sure the scope is nicely centered			
 		}
 	}
 	
@@ -685,11 +684,7 @@ void SID::synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint3
 	APPLY_MASTERVOLUME(final_sample);	
 	APPLY_EXTERNAL_FILTER(final_sample, _sample_rate);
 	
-	int16_t *dest= buffer + (offset << 1) + _dest_channel; 	// always use interleaved stereo buffer
-	
-	if (!do_clear) final_sample += *(dest);
-
-	RENDER_CLIPPED(dest, final_sample);
+	return final_sample;
 }
 
 // "friends only" accessors
@@ -775,21 +770,80 @@ void SID::clockAll() {
 	}
 }
 
-void SID::synthSample(int16_t* buffer, int16_t** synth_trace_bufs, double* scale, uint32_t offset) {
-	for (uint8_t i= 0; i<_used_sids; i++) {
+void SID::synthMonoSamples(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset) {
+	// most relevant: single-SID case
+
+	int16_t *dest = buffer + (offset << 1);
+
+	if (SID::isAudible()) {
+		const uint8_t i= 0;
 		SID &sid = _sids[i];
-		int16_t **sub_buf = !synth_trace_bufs ? 0 : &synth_trace_bufs[i << 2];	// synthSample uses 4 entries..
-		sid.synthSample(buffer, sub_buf, offset, scale, !i);
-	}
+		int16_t **sub_buf = !synth_trace_bufs ? 0 : &synth_trace_bufs[i << 2];	// each sid uses 4 entries..
+		int32_t  final_sample = sid.synthSample(buffer, sub_buf, offset);
+		
+		RENDER_CLIPPED(dest, final_sample);	
+		dest[1]= dest[0];	// copy mono
+		
+	} else { 
+		dest[0]= dest[1]= 0; 
+	}	
 }
 
-void SID::synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, double* scale, uint32_t offset) {
-	for (uint8_t i= 0; i<_used_sids; i++) {
-		SID &sid = _sids[i];
-		int16_t **sub_buf = !synth_trace_bufs ? 0 : &synth_trace_bufs[i << 2];	// synthSample uses 4 entries..
-		sid.synthSampleStripped(buffer, sub_buf, offset, scale, (i == 0) || (i == _sid_2nd_chan_idx));
-	}
+void SID::synthStereoSamples(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset) {
+	// multi-SID case: using per-SID stereo panning
+		
+	int16_t *dest = buffer + (offset << 1);
+	
+	if (SID::isAudible()) {		// might be skipped in this scenario
+		int32_t final_sample_l = 0;
+		int32_t final_sample_r = 0;
+		
+		for (uint8_t i= 0; i<_used_sids; i++) {
+			SID &sid = _sids[i];
+			int16_t **sub_buf = !synth_trace_bufs ? 0 : &synth_trace_bufs[i << 2];	// each sid uses 4 entries..
+			
+			int32_t s = sid.synthSample(buffer, sub_buf, offset);
+			
+			final_sample_l += s * sid._pan_left;
+			final_sample_r += s * sid._pan_right;
+		}
+				
+		RENDER_CLIPPED(dest, final_sample_l);
+		RENDER_CLIPPED(dest+1, final_sample_r);
+		
+	} else { 
+		dest[0]= dest[1]= 0; 
+	}	
 }
+
+void SID::synthStereoSamples2(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset) {
+	// multi-SID case: using per-SID stereo panning (copy/paste of above - just avoiding repeated checks
+	// within loop)
+		
+	int16_t *dest = buffer + (offset << 1);
+	
+	if (SID::isAudible()) {		// might be skipped in this scenario
+		int32_t final_sample_l = 0;
+		int32_t final_sample_r = 0;
+		
+		for (uint8_t i= 0; i<_used_sids; i++) {
+			SID &sid = _sids[i];
+			int16_t **sub_buf = !synth_trace_bufs ? 0 : &synth_trace_bufs[i << 2];	// each sid uses 4 entries..
+			
+			int32_t s = sid.synthSampleStripped(buffer, sub_buf, offset);
+			
+			final_sample_l += s * sid._pan_left;
+			final_sample_r += s * sid._pan_right;
+		}
+				
+		RENDER_CLIPPED(dest, final_sample_l);
+		RENDER_CLIPPED(dest+1, final_sample_r);
+		
+	} else { 
+		dest[0]= dest[1]= 0; 
+	}	
+}
+
 
 void SID::resetGlobalStatistics() {
 	for (uint8_t i= 0; i<_used_sids; i++) {
@@ -831,22 +885,45 @@ void SID::resetAll(uint32_t sample_rate, uint32_t clock_rate, uint8_t is_rsid,
 			_used_sids++;
 		}
 	}
+		
+//	if (_ext_multi_sid) {
+//		_vol_scale = _vol_map[_sid_2nd_chan_idx ? _used_sids >> 1 : _used_sids - 1] / 0xff;
+//	} else {
+		_vol_scale = _vol_map[_used_sids - 1] / 0xff;	// 0xff serves to normalize the 8-bit envelope
+//	}
+	
 	// setup the configured SID chips & make map where to find them
 		
 	for (uint8_t i= 0; i<_used_sids; i++) {
 		SID &sid = _sids[i];
-		sid.reset(_sid_addr[i], sample_rate, _sid_is_6581[i], clock_rate, is_rsid, is_compatible, _sid_target_chan[i]);	// stereo only used for my extended sid-file format
+		sid.reset(_sid_addr[i], sample_rate, _sid_is_6581[i], clock_rate, is_rsid, is_compatible);	// stereo only used for my extended sid-file format
 			
 		if (i) {	// 1st entry is always the regular default SID
 			memset((void*)(_mem2sid + _sid_addr[i] - 0xd400), i, 0x1f);
-		}
+		}		
+	}	
+}
+void SID::initPanning(float *panPerSID) {
+	for (uint8_t i= 0; i<_used_sids; i++) {
+		SID &sid = _sids[i];
+		sid.setPanning(_used_sids == 1 ? 1.0 : panPerSID[i]);
 	}
+}
+extern "C" void	sidSetPanning(uint8_t sid_idx, float panning) {
+	if (_used_sids == 1) panning = 1.0;	// keep using full volume mono
 	
-	if (_ext_multi_sid) {
-		_vol_scale = _vol_map[_sid_2nd_chan_idx ? _used_sids >> 1 : _used_sids - 1] / 0xff;
-	} else {
-		_vol_scale = _vol_map[_used_sids - 1] / 0xff;	// 0xff serves to normalize the 8-bit envelope
+	if (sid_idx < _used_sids) {
+		SID &sid = _sids[sid_idx];
+		sid.setPanning(panning);
 	}
+}
+
+void SID::setPanning(float pan) {
+	// fixme: attempt to move the _vol_scale scaling here (to avoid additional multiplication)
+	// lead to problems in MSK-Marlborow.sid /Smilin_Evil, etc) - additional analysis needed (mb some ovberflow/cropping issue)
+	
+	_pan_right = pan;
+	_pan_left = (1.0 - pan);
 }
 
 uint8_t SID::isExtMultiSidMode() {

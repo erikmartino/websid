@@ -54,7 +54,7 @@ static void resetDefaults(uint32_t sample_rate, uint8_t is_rsid,
 	
 	uint32_t clock_rate= sysGetClockRate(is_ntsc);
 	SID::resetAll(sample_rate, clock_rate, is_rsid, is_compatible);
-	
+		
 	_sample_cycles= 0;
 }
 
@@ -81,27 +81,6 @@ void Core::rsidRunTest() {
 }
 #endif
 
-void copyMonoSignal(int16_t* synth_buffer, uint16_t samples_per_call) {
-	for (int i= 0; i<samples_per_call; i++) {
-		synth_buffer[(i << 1) + 1] = synth_buffer[i << 1]; // single-SID songs are mono
-	}
-}
-
-// For some reason "inline" does not seem to reliably work in the 
-// EMSCRIPTEN context and the below "define" serve the same purpose 
-// (avoid additional subroutine nesting just in case).
-
-// clocking used for "normal" songs". note: for a slow garbage song 
-// like Baroque_Music_64_BASIC the sysClockOpt()/SYNTH_NORMAL  bring down 
-// the "silence detection" from 33 sec to 19 secs
-
-#define SYNTH_NORMAL(synth_buffer, synth_trace_bufs, scale, i) \
-	if (SID::isAudible()) { \
-		SID::synthSample(synth_buffer, synth_trace_bufs, &scale, i); \
-	} else { \
-		synth_buffer[(i<<1)]= 0; \
-	}
-	
 void runEmulation(uint8_t is_simple_sid_mode, int16_t* synth_buffer, 
 					int16_t** synth_trace_bufs, uint16_t samples_per_call) {
 						
@@ -116,34 +95,58 @@ void runEmulation(uint8_t is_simple_sid_mode, int16_t* synth_buffer,
 
 	// performance info: JavaScript performance.now() measurements with a 8SID 
 	// song suggest that only a small fraction of the overall runtime is spent
-	// in the SID::synthSample() and most of the time is spent in the earlier
+	// in the SID::synth*() and most of the time is spent in the earlier
 	// clock-by-clock emulation of the system components; 2 (5) vs 12 (21)
 	
-	double scale = SID::getScale();	// avoid recalc within loop
+//	double scale = SID::getScale();	// avoid recalc within loop XXX FIXME why not use at end..
 
-	if (is_simple_sid_mode) {
+	
+	if (SID::getNumberUsedChips() == 1) {
+		
+		// most relevant case.. only one SID
 		for (int i= 0; i<samples_per_call; i++) {
 			while(_sample_cycles < n) {
+				
+				// clocking used for "normal" songs". note: for a slow garbage song 
+				// like Baroque_Music_64_BASIC the sysClockOpt()/SID::isAudible()  bring down 
+				// the "silence detection" from 33 sec to 19 secs
+				
 				sysClockOpt();
 				_sample_cycles++;
 			}
 			_sample_cycles -= n;	// keep overflow
-
-			SYNTH_NORMAL(synth_buffer, synth_trace_bufs, scale, i);
-		}
-		copyMonoSignal(synth_buffer, samples_per_call);
-
-	} else {
-		for (int i= 0; i<samples_per_call; i++) {
-			while(_sample_cycles < n) {
-				sysClock();
-				_sample_cycles++;
-			}
-			_sample_cycles -= n;	// keep overflow
 			
-			// optimization: use no filter for trace buffers & no digis 
-			// (my slow PC is really at the limit here as it is)
-			SID::synthSampleStripped(synth_buffer, synth_trace_bufs, &scale, i);
+			SID::synthMonoSamples(synth_buffer, synth_trace_bufs, i); 
+		}
+	
+	} else {
+		
+		if (is_simple_sid_mode) {
+			// standard sid-file mode, for 2 and 3 SID configurations
+									
+			for (int i= 0; i<samples_per_call; i++) {
+				while(_sample_cycles < n) {
+					sysClockOpt();
+					_sample_cycles++;
+				}
+				_sample_cycles -= n;	// keep overflow
+
+				SID::synthStereoSamples(synth_buffer, synth_trace_bufs, i); 
+			}		
+			
+		} else {
+			// extended multi-sid mode for up to 10 SIDs (for performance reasons
+			// the "scope" handling here is stripped down to a less expensive impl)
+			
+			for (int i= 0; i<samples_per_call; i++) {
+				while(_sample_cycles < n) {
+					sysClock();
+					_sample_cycles++;
+				}
+				_sample_cycles -= n;	// keep overflow
+				
+				SID::synthStereoSamples2(synth_buffer, synth_trace_bufs, i);
+			}
 		}
 	}
 }

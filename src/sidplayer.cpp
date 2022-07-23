@@ -156,13 +156,6 @@ static uint16_t _sidRegSnapshotMax = 0;
 
 static void initSidRegSnapshotBuffers() {
 	_sidSnapshotSmplCount = 0;
-/*
-	_sidSnapshotSmplCount += _chunk_size;
-	if (_sidSnapshotSmplCount >= _procBufSize) {
-		// the different intervals might lead to data drifting apart - try to limit that effect
-		// by resyncing to the double buffers..
-	}
-	*/
 	
 	if (!_sidRegSnapshots) {
 		_sidRegSnapshots = (uint8_t**) calloc(MAX_SIDS, sizeof(uint8_t*));

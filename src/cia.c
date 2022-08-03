@@ -636,8 +636,13 @@ void ciaClockRSID() {
 
 // "PSID only" performance optimizations:
 void ciaClockRasterPSID() {
-	// use no timers *at all*
+	// ideally this would use no timers *at all* - but some RASTER IRQ PSIDs
+	// actually expect to read a live timer... testcase: Delta_Mix-E-Load_loader.sid
+	
+	struct Timer* timer1 = &(_cia[CIA1]);
+	clock(timer1);
 }
+
 void ciaClockTimerPSID() {
 	// PSID exclusively uses CIA1/A! (this could probably be further
 	// sped up by replacing the regular timer impl with some dummy

@@ -835,7 +835,8 @@ void WaveGenerator::setWave(const uint8_t new_ctrl) {
 
 void WaveGenerator::setPulseWidthLow(const uint8_t val) {
 	_pulse_width = (_pulse_width & 0x0f00) | val;
-
+	_pulse_width12 = ((uint32_t)_pulse_width) << 12;	// for direct comparisons with 24-bit osc accumulator
+	
 #ifdef USE_HERMIT_ANTIALIAS
 	// 16 MSB pulse needed (input is 12-bit)
 	_pulse_out = (uint32_t)(_pulse_width * SCALE_12_16);

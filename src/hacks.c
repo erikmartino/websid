@@ -274,6 +274,15 @@ static void patchGamePlayerIfNeeded(uint16_t init_addr) {
 	}
 }
 
+static void patchFeelingGoodIfNeeded(uint16_t init_addr) {
+	// Feeling_Good.sid is a another testcase for timing flaw regarding 
+	// NMI that interrupts RTI
+	uint8_t pattern[] = {0xee,0xe5, 0x1c, 0xee, 0x1a, 0x1d};
+	if ((init_addr == 0x1000) && (memMatch(0x1cf7, pattern, 6))) {
+		cpuHackNMI(1);	// incorrect NMI behavior: prevent NMI from firing during RTI
+	}
+}
+
 static void patch4NonBlondesIfNeeded(uint16_t init_addr) {
 	// 4_Non_Blondes-Whats_Up_Remix.sid is a nice testcase for a VIC(badlines) related flaw	
 	
@@ -284,8 +293,11 @@ static void patch4NonBlondesIfNeeded(uint16_t init_addr) {
 }
 
 void hackIfNeeded(uint16_t init_addr) {
+
 	cpuHackNMI(0);	// disable incorrect NMI behavior
 	
+	patchFeelingGoodIfNeeded(init_addr);
+
 	patch4NonBlondesIfNeeded(init_addr);
 	
 	patchGamePlayerIfNeeded(init_addr);

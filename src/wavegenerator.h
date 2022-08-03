@@ -15,9 +15,7 @@
 
 // Hermit's impls are quite a bit off as compared to respective oversampled
 // signals. My new impl now should be much closer to the real thing.
-// Unfortunately my new impl still seems to have relevant flaws - see Jani's test cases
-// testcase: Slapshot_1987.sid
-#define USE_HERMIT_ANTIALIAS
+//#define USE_HERMIT_ANTIALIAS
 
 
 class WaveGenerator {

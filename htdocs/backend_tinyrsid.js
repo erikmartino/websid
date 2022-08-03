@@ -104,13 +104,20 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 				this.initPanningCfg(this.panPerSID);
 			}			
 		},
+		/**
+		* @param panPerSID 10-entry array with float-values ranging from 0.0 (100% left channel) to 1.0 (100% right channel)
+		*/
 		initPanningCfg: function(panPerSID) {
-			// note: this might be called before the WASM is ready
-			this.panPerSID = panPerSID;
-			
-			if (!backend_SID.Module.notReady) {
-				this.Module.ccall('initPanningCfg', 'number', ['number','number','number','number','number','number','number','number','number','number'], 
-														[panPerSID[0],panPerSID[1],panPerSID[2],panPerSID[3],panPerSID[4],panPerSID[5],panPerSID[6],panPerSID[7],panPerSID[8],panPerSID[9]]);
+			if (panPerSID.length != 10) {
+				console.log("error: initPanningCfg requires an array with panning-values for each of 10 SIDs that WebSid potentially supports.");
+			} else {
+				// note: this might be called before the WASM is ready
+				this.panPerSID = panPerSID;
+				
+				if (!backend_SID.Module.notReady) {
+					this.Module.ccall('initPanningCfg', 'number', ['number','number','number','number','number','number','number','number','number','number'], 
+															[panPerSID[0],panPerSID[1],panPerSID[2],panPerSID[3],panPerSID[4],panPerSID[5],panPerSID[6],panPerSID[7],panPerSID[8],panPerSID[9]]);
+				}
 			}
 		},
 		getPanning: function(sidIdx) {

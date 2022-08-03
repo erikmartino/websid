@@ -575,6 +575,7 @@ void memRsidInit(uint16_t free_space, uint16_t *init_addr, uint8_t actual_subson
 void memRsidMain(uint16_t free_space, uint16_t *init_addr) {
 	// For RSIDs that just RTS from their INIT (relying just on the IRQ/NMI
 	// they have started) there should better be something to return to..
+	// 6-byte driver (as compared to bigger 33 bytes PSID driver)
 
 	if (!free_space) {
 		return;	// no free space anywhere.. that shit better not RTS!

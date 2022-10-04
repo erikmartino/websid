@@ -153,7 +153,7 @@ static WaveformTables _wave_table;		// only need one instance of this
 		 \
 		/* issue: this uses only 1-sample resolution and the anti-aliasing */ \
 		/* used for some WFs might cause problems here.. */ \
-		_noiseout = ((this)->*(this->getOutput))();	/* XXX maybe a separate var should rather be used to not cause confusion.. */ \
+		_noiseout = ((this)->*(this->getOutput))();	/* maybe a separate var should rather be used to not cause confusion.. */ \
 	}
 
 
@@ -297,7 +297,7 @@ void WaveGenerator::shiftNoiseRegisterNoTestBit() {
 
 /*
 	// since regular feedback was suppressed in the "phase 1" (see CLOCK_NOISE_GENERATOR)
-	// we should better catch up on that now: XXX check if this does any good..
+	// we should better catch up on that now: todo: check if this does any good..
 	if ((_ctrl&0xf0)>NOISE_BITMASK) {
 		// _counter has already been updated for the current clock so the
 		// below retroactively calulated output may actually be flawed
@@ -775,11 +775,7 @@ void WaveGenerator::reset(double cycles_per_sample) {
 
 	_freq_inc_sample = _prev_wav_data = 0;
 
-#ifdef PSID_DEBUG_ADSR
-	setMute(i != PSID_DEBUG_VOICE);
-#else
 	setMute(0);
-#endif
 
 	_floating_null_wf = 0;
 

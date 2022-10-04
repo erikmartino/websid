@@ -30,9 +30,6 @@ uint16_t	cpuGetPC();
 uint8_t		cpuGetSP();
 #endif
 
-#ifdef PSID_DEBUG_ADSR
-void		cpuPsidDebug(uint16_t play_addr);
-#endif
 
 void		cpuHackNMI(uint8_t on);
 

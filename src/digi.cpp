@@ -88,9 +88,7 @@ bool DigiDetector::isMahoney() {
 	return _used_digi_type == DigiMahoneyD418;
 }
 
-int8_t DigiDetector::routeDigiSignal(Filter *filter, int32_t *digi_out,
-									int32_t *outf, int32_t *outo) {
-
+int8_t DigiDetector::useOverrideDigiSignal(int32_t *digi_out, int32_t *dvoice_idx) {
 	if ((_used_digi_type != DigiNone) && _digi_enabled) {
 
 		(*digi_out) = getSample();	// used for "scope"
@@ -112,15 +110,17 @@ int8_t DigiDetector::routeDigiSignal(Filter *filter, int32_t *digi_out,
 			case DigiPWMTest:
 				// PWM creates annoying carrier signal and used voices are therefore
 				// muted - instead the final digi signal is directly fed back into the audio signal
-				filter->routeSignal((*digi_out), outf, outo,  getSource() - 1);
-			
-				return getSource() - 1;
+				*dvoice_idx=  getSource() - 1;
+				return 1;
 			default:
 				// do not show voice output based techniques in separate digi scope..
 				break;
 		}
+	} else {
+		(*digi_out) = 0;
 	}
-	return -1;
+	(*dvoice_idx) = -1;
+	return 0;
 }
 
 DigiType DigiDetector::getType() {
@@ -163,7 +163,7 @@ int32_t DigiDetector::getSample() {	// only for D418&PWM based samples (other te
 	return _current_digi_sample;
 }
 
-uint8_t DigiDetector::getSource() {
+int8_t DigiDetector::getSource() {
 	return _current_digi_src;
 }
 
@@ -416,7 +416,7 @@ uint8_t DigiDetector::handlePulseModulationDigi(uint8_t voice, uint8_t reg, uint
 					uint8_t sample = _pulse_detect_delayed_sample[voice];
 
 					// played waveform may actually be a problem here.. (maybe an envelope issue?)
-					 _sid->setMute(voice, 1);        // test-case: Wonderland_XII-Digi_part_1
+					_sid->setMute(voice, 1);        // test-case: Wonderland_XII-Digi_part_1
 
 					_pulse_detect_state[voice] = PulseIdle;	// just to reduce future comparisons
 					return recordPulseSample(voice, sample);
@@ -538,7 +538,7 @@ uint8_t DigiDetector::isMahoneyDigi() {
 
 uint8_t DigiDetector::setSwallowMode(uint8_t voice, uint8_t m) {
 	_swallow_pwm[voice] = m;
- 	_sid->setMute(voice, 1);	// avoid wheezing base signals created by regular voice output
+	_sid->setMute(voice, 1);	// avoid wheezing base signals created by regular voice output
 
 	return 1;
 }

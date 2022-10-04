@@ -14,6 +14,8 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 		$this.base.call(this, backend_SID.Module, 2);	// use stereo (for the benefit of multi-SID songs)
 		this.playerSampleRate;
 
+		this.maxSids = 10;	// redundant to C side code
+		
 		this.cutoffSize = 1024;
 		
 		this._scopeEnabled= false;
@@ -43,31 +45,35 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 	extend(EmsHEAP16BackendAdapter, $this, {
 		doOnAdapterReady: function() {
 			// called when runtime is ready (e.g. asynchronously when WASM is loaded)
-			if (typeof this.panPerSID != 'undefined') {
-				this.initPanningCfg(this.panPerSID);
+			if (typeof this.panArray != 'undefined') {
+				this.initPanningCfg(this.panArray);
 			}			
 		},
 		/**
-		* @param panPerSID 10-entry array with float-values ranging from 0.0 (100% left channel) to 1.0 (100% right channel)
+		* @param panArray 30-entry array with float-values ranging from 0.0 (100% left channel) to 1.0 (100% right channel) .. one value for each voice of the max 10 SIDs
 		*/
-		initPanningCfg: function(panPerSID) {
-			if (panPerSID.length != 10) {
+		initPanningCfg: function(panArray) {
+			if (panArray.length != this.maxSids*3) {
 				console.log("error: initPanningCfg requires an array with panning-values for each of 10 SIDs that WebSid potentially supports.");
 			} else {
 				// note: this might be called before the WASM is ready
-				this.panPerSID = panPerSID;
+				this.panArray = panArray;
 				
 				if (!backend_SID.Module.notReady) {
-					this.Module.ccall('initPanningCfg', 'number', ['number','number','number','number','number','number','number','number','number','number'], 
-															[panPerSID[0],panPerSID[1],panPerSID[2],panPerSID[3],panPerSID[4],panPerSID[5],panPerSID[6],panPerSID[7],panPerSID[8],panPerSID[9]]);
+					this.Module.ccall('initPanningCfg', 'number', ['number','number','number','number','number','number','number','number','number','number',
+																	'number','number','number','number','number','number','number','number','number','number',
+																	'number','number','number','number','number','number','number','number','number','number'], 
+															[panArray[0],panArray[1],panArray[2],panArray[3],panArray[4],panArray[5],panArray[6],panArray[7],panArray[8],panArray[9],
+															panArray[10],panArray[11],panArray[12],panArray[13],panArray[14],panArray[15],panArray[16],panArray[17],panArray[18],panArray[19],
+															panArray[20],panArray[21],panArray[22],panArray[23],panArray[24],panArray[25],panArray[26],panArray[27],panArray[28],panArray[29],]);
 				}
 			}
 		},
-		getPanning: function(sidIdx) {
-			return this.Module.ccall('getPanning', 'number', ['number'], [sidIdx]);
+		getPanning: function(sidIdx, voiceIdx) {
+			return this.Module.ccall('getPanning', 'number', ['number', 'number'], [sidIdx, voiceIdx]);
 		},
-		setPanning: function(sidIdx, panning) {
-			this.Module.ccall('setPanning', 'number',  ['number','number'], [sidIdx, panning]);
+		setPanning: function(sidIdx, voiceIdx, panning) {
+			this.Module.ccall('setPanning', 'number',  ['number','number','number'], [sidIdx, voiceIdx, panning]);
 		},		
 		nopCB: function() {
 		},
@@ -416,6 +422,36 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 			this.Module.ccall('enableVoice', 'number', ['number', 'number', 'number'], [sidIdx, voice, on]);
 		},
 
+		getStereoLevel: function() {
+			return this.Module.ccall('getStereoLevel', 'number');
+		},
+		getReverbLevel: function() {
+			return this.Module.ccall('getReverbLevel', 'number');
+		},
+		getHeadphoneMode: function() {
+			return this.Module.ccall('getHeadphoneMode', 'number');
+		},
+		
+		/**
+		* @param effect_level -1=stereo completely disabled (no panning), 0=no stereo enhance disabled (only panning); >0= stereo enhance enabled: 16384=low 24576=medium 32767=high
+		*/
+		setStereoLevel: function(effect_level) {
+			return this.Module.ccall('setStereoLevel', 'number', ['number'], [effect_level]);
+		},
+		
+		/**
+		* @param level 0..100
+		*/
+		setReverbLevel: function(level) {
+			return this.Module.ccall('setReverbLevel', 'number', ['number'], [level]);
+		},
+		/**
+		* @param mode 0=headphone 1=ext-headphone
+		*/
+		setHeadphoneMode: function(mode) {
+			return this.Module.ccall('setHeadphoneMode', 'number', ['number'], [mode]);
+		},
+		
 		
 		/**
 		* @deprecated use getSIDRegister instead

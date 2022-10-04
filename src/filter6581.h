@@ -44,7 +44,7 @@ protected:
 
 	virtual void resyncCache();
 
-	virtual double doGetFilterOutput(double sum_filter_in, double sum_nofilter_in, double* band_pass, double* low_pass, double* hi_pass);
+	virtual double doGetFilterOutput(double sum_filter_in, double* band_pass, double* low_pass, double* hi_pass);
 
 	double cutoffMultiplier(double filter_out);
 	

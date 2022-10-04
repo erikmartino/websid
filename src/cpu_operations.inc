@@ -56,15 +56,6 @@ uint8_t test_running = 0;
 char _load_filename[32];
 #endif
 
-#ifdef PSID_DEBUG_ADSR
-uint16_t _play_addr = 0;
-
-void cpuPsidDebug(uint16_t play_addr) {
-	_play_addr = play_addr;
-}
-static uint16_t _frame_count;
-extern void sidDebug(int16_t frame_count);
-#endif
 
 // ----------------------- CPU state -----------------------------
 
@@ -226,9 +217,6 @@ void cpuStatusInit() {
 
 #endif
 
-#ifdef PSID_DEBUG_ADSR
-	_frame_count = 0;
-#endif
 }
 
 void cpuSetProgramCounter(uint16_t pc, uint8_t a) {
@@ -764,12 +752,6 @@ static void runPrefetchedOp() {
 
 //	if (_pc == 0xEA79) fprintf(stderr, "%x %x\n", memGet(0xEA79), memGet(0xEA7a));
 
-#ifdef PSID_DEBUG_ADSR
-	if (_play_addr == _pc) {	// PSID play routine is about to be invoked..
-		sidDebug(_frame_count - 1);
-		_frame_count++;
-	}
-#endif
 
 	// "prefetch" already loaded the opcode (_pc already points to next byte):
 	_opc = _exe_instr_opcode;	// use what was actually valid at the 1st cycle of the op

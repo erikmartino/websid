@@ -41,7 +41,7 @@ void Filter8580::resyncCache() {
 #endif
 }
 
-double Filter8580::doGetFilterOutput(double sum_filter_in, double sum_nofilter_in, double* band_pass, double* low_pass, double* hi_pass) {
+double Filter8580::doGetFilterOutput(double sum_filter_in, double* band_pass, double* low_pass, double* hi_pass) {
 
 	(*hi_pass) = sum_filter_in + (*band_pass) * _resonance + (*low_pass);
 	(*band_pass) = (*band_pass) - (*hi_pass) * _cutoff;
@@ -57,5 +57,5 @@ double Filter8580::doGetFilterOutput(double sum_filter_in, double sum_nofilter_i
 	if (_bandpass_ena)	{ filter_out -= (*band_pass); }
 	if (_lowpass_ena)	{ filter_out += (*low_pass); }
 	
-	return sum_nofilter_in + filter_out;
+	return filter_out;
 }

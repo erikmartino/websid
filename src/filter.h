@@ -49,15 +49,9 @@ protected:
 		
 	void setSampleRate(uint32_t sample_rate);
 
-	int32_t getOutput(int32_t* in, int32_t* out);
-	int16_t simOutput(uint8_t voice_idx, int32_t voice_out);
-
-	double runFilter(double sum_filter_in, double sum_nofilter_in, double* prevbandpass, double* prevlowpass, double* prevhipass);
-
-	/**
-	* @return true if voice is filtered
-	*/
-	uint8_t routeSignal(int32_t voice_out, int32_t* outf, int32_t* outo, uint8_t voice_idx);
+	int32_t getVoiceOutput(int32_t voice_idx, int32_t* in);
+	int32_t getVoiceScopeOutput(int32_t voice_idx, int32_t* in);
+	
 	/**
 	* Handle those SID writes that impact the filter.
 	*/
@@ -70,7 +64,7 @@ protected:
 	* Hooks that must be defined in subclasses.
 	*/
 	virtual void resyncCache() = 0;
-	virtual double doGetFilterOutput(double sum_filter_in, double sum_nofilter_in, double* band_pass, double* low_pass, double* hi_pass) = 0;
+	virtual double doGetFilterOutput(double sum_filter_in, double* band_pass, double* low_pass, double* hi_pass) = 0;
 
 private:
 	friend class SID;
@@ -79,6 +73,8 @@ private:
 
 	class SID* _sid;
 
+	void clearFilterState();
+	
 protected:
 	static uint32_t _sample_rate;		// target playback sample rate
 
@@ -97,7 +93,7 @@ protected:
 		
 private:
 		// control flags from registers	
-	bool  _is_filter_off;
+	bool  _is_filter_on;
 	bool _filter_ena[3];	// filter activation per voice
 
 	bool  _voice3_ena;		// special "voice 3 feature"
@@ -105,16 +101,10 @@ private:
 	// internal state of regular filter
 
 		// derived from Hermit's filter implementation: see http://hermit.sidrip.com/jsSID.html
-	double _lp_out;	// previous "low pass" output
-	double _bp_out;	// previous "band pass" output
-	double _hp_out;	// previous "hi pass" output
+	struct FilterState _voice[3];
 
-		// filter output for simulated individual voice data (not used for actual playback)
-		// allows to visualize the approximate effect the filter had on the respective voices (if any)
+		// filter output for "scope view" visialization output of the voices
 	struct FilterState _sim_voice[3];
-	/*double _lp_sim[3];
-	double _bp_sim[3];
-	double _hp_sim[3];*/
 };
 
 

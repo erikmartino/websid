@@ -51,7 +51,7 @@ protected:
 
 	// result accessors
 	int32_t getSample(); // get last D418 or PWM digi-sample (as signed 16-bit)
-	uint8_t getSource();
+	int8_t getSource();
 	int32_t genPsidSample(int32_t sample_in);	// legacy PSID digis
 
 	bool isMahoney();
@@ -60,13 +60,14 @@ protected:
 	uint8_t detectSample(uint16_t addr, uint8_t value);
 
 	void setEnabled(uint8_t value);
-
+	
+	
 	/**
-	* @param digi_out	returns digi signal, e.g. for tracing purposes
-	* @param outf	filtered output that digi_out is added to if necessary
-	* @param outo	unfiltered output that digi_out is added to if necessary
+	* @param digi_out	returns the detected raw digi signal
+	* @param dvoice_idx	returns the index of the voice that is used for digi-playback (flawed impl, but relevant FM digis only use one voice)
+	* return 1 if original voice output should be overridden
 	*/
-	int8_t routeDigiSignal(class Filter* filter, int32_t* digi_out, int32_t* outf, int32_t* outo);
+	int8_t useOverrideDigiSignal(int32_t *digi_out, int32_t *dvoice_idx);
 	
 	// diagnostics
 	DigiType getType();
@@ -113,7 +114,7 @@ private:
 
 	// last detected
 	int32_t _current_digi_sample;
-	uint8_t _current_digi_src;
+	int8_t _current_digi_src;
 
 	// FM: tracked timing state
 	uint8_t _fm_count;

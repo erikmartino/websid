@@ -45,11 +45,17 @@ Filter::Filter(SID* sid) {
 Filter::~Filter() {
 }
 
+void Filter::clearFilterState() {
+	for (int i= 0; i<3; i++) {
+		struct FilterState *state = &_voice[i];
+		state->_lp_out = state->_bp_out = state->_hp_out = 0;
+	}
+}
+
 void Filter::setSampleRate(uint32_t sample_rate) {
 	_sample_rate = sample_rate;
 
-	_lp_out = _bp_out = _hp_out = 0;
-	
+	clearFilterState();
 	resyncCache();	
 }
 
@@ -86,8 +92,8 @@ void Filter::poke(uint8_t reg, uint8_t val) {
 
 				
 				if (!(val & 0x70)) {
-					_lp_out = _bp_out= _hp_out = 0;
-					
+					clearFilterState();
+
 					clearSimOut(0);
 					clearSimOut(1);
 					clearSimOut(2);
@@ -99,75 +105,64 @@ void Filter::poke(uint8_t reg, uint8_t val) {
 
 				_voice3_ena = !getBit(val, 7);		// chan3 off
 
-				_is_filter_off = (val & 0x70) == 0;	// optimization
+				_is_filter_on = (val & 0x70) != 0;	// optimization
 #endif
 			break;
 			}
 	};
 }
 
-// voice output visualization works better if the effect of the filter is included
-int16_t Filter::simOutput(uint8_t voice_idx, int32_t voice_out) {
-	int32_t o = 0, f = 0;	// isolated from other voices
-
-	uint8_t is_filtered = routeSignal(voice_out, &f, &o, voice_idx);	// redundant.. see above
-
-#ifdef USE_FILTER
-	struct FilterState *state = &_sim_voice[voice_idx];
-
-	double output =	runFilter((double)f, (double)o, &(state->_bp_out), &(state->_lp_out), &(state->_hp_out));
-
-	// not using master volume here: "original" voice output is more interesting without potential distortions
-	// caused by the D418 digis.. (which are already tracked as a dedicated 4th voice)
-	
-	return (int16_t) (is_filtered ? output * FILTERED_SCOPE_SCALEDOWN : output * SCOPE_SCALEDOWN);
-#else
-	return (int16_t)((*out) * SCOPE_SCALEDOWN);
-#endif
-}
-
-int32_t Filter::getOutput(int32_t* sum_filter_in, int32_t* out) {
-
-#ifdef USE_FILTER
-	return runFilter((double)(*sum_filter_in), (double)(*out), &(_bp_out), &(_lp_out), &(_hp_out));
-#else
-	return (*out);
-#endif
-}
-
 uint8_t Filter::isSilencedVoice3(uint8_t voice_idx) {
 	return ((voice_idx == 2) && (!_voice3_ena) && (!_filter_ena[2]));
 }
 
-uint8_t Filter::routeSignal(int32_t voice_out, int32_t* outf, int32_t* outo, uint8_t voice_idx) {
+int32_t Filter::getVoiceOutput(int32_t voice_idx, int32_t* in) {
+	FilterState *s= &_voice[voice_idx];
+	int32_t out;
+	
 #ifdef USE_FILTER
-	// note: compared to other emus output volume is quite high.. maybe better reduce it a bit?
-
 	// regular routing
-	if (_filter_ena[voice_idx]) {
+	if (_filter_ena[voice_idx] && _is_filter_on) {
 		// route to filter
-		(*outf) += voice_out;
-		return 1;
+		out= doGetFilterOutput(*in, &s->_bp_out, &s->_lp_out, &s->_hp_out);
 	} else {
 		// route directly to output
-		(*outo) += voice_out;
-		return 0;
+		out= *in;
 	}
 #else
-	// Don't use filters, just mix all voices together
+	// don't use filters
 	if (*not_muted) {
-		(*outo) += voice_out;
+		out = *in;
 	}
-	return 0;
 #endif
+	return out;
 }
 
-double Filter::runFilter(double sum_filter_in, double sum_nofilter_in, double* band_pass, double* low_pass, double* hi_pass) {
-	if (_is_filter_off) {
-		// fixed bug in Hermit's impl: when neither high, band, nor lowpass is active then the
-		// 'sum_nofilter_in' (i.e. unfiltered signal) was returned and 'sum_filter_in' was completely ignored!
-		return sum_nofilter_in + sum_filter_in; 	// see Dancing_in_the_Moonlight
-	} else {						
-		return doGetFilterOutput(sum_filter_in, sum_nofilter_in, band_pass, low_pass, hi_pass);
+
+// note: in order to get a nicely centered graph, unfortunately the filter calcs
+// have to be repeated (the alternative would be to compensate SID specific offsets - which would 
+// be a pain in the ass due to filter specific signal flipping)
+
+int32_t Filter::getVoiceScopeOutput(int32_t voice_idx, int32_t* in) {
+	FilterState *s= &_sim_voice[voice_idx];
+	
+	int32_t out;
+	
+#ifdef USE_FILTER
+	// regular routing
+	if (_filter_ena[voice_idx] && _is_filter_on) {
+		// route to filter
+		out= doGetFilterOutput(*in, &s->_bp_out, &s->_lp_out, &s->_hp_out) * FILTERED_SCOPE_SCALEDOWN;
+	} else {
+		// route directly to output
+		out= *in * SCOPE_SCALEDOWN;
 	}
+#else
+	// don't use filters
+	if (*not_muted) {
+		out = *in * SCOPE_SCALEDOWN;
+	}
+#endif
+	return out;
 }
+

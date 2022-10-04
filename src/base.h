@@ -28,7 +28,6 @@ typedef unsigned long uint32_t;
 * limited to the specified voice and the specified frame-range 
 */
 
-//#define PSID_DEBUG_ADSR
 #define PSID_DEBUG_VOICE 1
 #define PSID_DEBUG_FRAME_START 10
 #define PSID_DEBUG_FRAME_END 30

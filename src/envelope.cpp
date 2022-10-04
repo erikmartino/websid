@@ -172,15 +172,6 @@ uint8_t Envelope::getSR() {
 	return getState(this)->sr;
 }
 
-#ifdef PSID_DEBUG_ADSR
-#include <stdio.h>
-
-void Envelope::debug() {
-	EnvelopeState* state = getState(this);
-	fprintf(stderr, "%02X%02X (LFSR %d)", state->ad & 0xff, state->sr & 0xff, state->current_LFSR);
-}
-#endif
-
 void Envelope::poke(uint8_t reg, uint8_t val) {
 	// thanks to the cycle-by-cycle emulation the below interactions are perfectly
 	// in sync with SID (and a post-mortem workarounds are no longer required)

@@ -49,9 +49,6 @@ protected:
 	* Gets the raw SR register.
 	*/
 	uint8_t getSR();
-#ifdef PSID_DEBUG_ADSR
-	void debug();
-#endif	
 private:
 	void syncADR();
 	uint8_t triggerLFSR_Threshold(uint16_t threshold, uint16_t* end);

@@ -25,14 +25,14 @@ public:
 	
 	void configure(uint8_t is_ext_file, uint8_t sid_file_version, uint16_t flags, uint8_t* addr_list);
 protected:
-	void init(uint16_t* addr, bool* set_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
+	void init(uint16_t* addrs, bool* set_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
 				bool* ext_multi_sid_mode);
 				
 	static uint16_t getSidAddr(uint8_t center_byte);
 		
 	friend class SID;
 private:
-	uint16_t* _addr;			// array of addresses
+	uint16_t* _addrs;			// array of addresses
 	bool* _is_6581;				// array of models
 	
 	// use of stereo:
@@ -109,13 +109,18 @@ public:
 	* 
 	* @param synth_trace_bufs when used it must be an array[4] containing
 	*                       buffers of at least length "offset"
+	* @param s_l returns left stereo sample
+	* @param s_r returns right stereo sample
 	*/		
-	int32_t synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+	void synthSample(int16_t** synth_trace_bufs, uint32_t offset, int32_t* s_l, int32_t* s_r);
 	
 	/**
 	* Stripped down (for performance) version of above synthSample.
+	*
+	* @param s_l returns left stereo sample
+	* @param s_r returns right stereo sample
 	*/
-	int32_t synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+	void synthSampleStripped(int16_t** synth_trace_bufs, uint32_t offset, int32_t* s_l, int32_t* s_r);
 
 
 	/**
@@ -153,7 +158,7 @@ public:
 	/**
 	* Sets the panning for this SID.
 	*/
-	void setPanning(float panning);
+	void setPanning(uint8_t voice_idx, float panning);
 
 	/**
 	* Clock all used SID chips.
@@ -190,9 +195,9 @@ public:
 	/**
 	* Renders the combined output of all currently used SIDs.
 	*/
-	static void	synthMonoSamples(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
-	static void synthStereoSamples(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
-	static void	synthStereoSamples2(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+	static void	synthSamplesSingleSID(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+	static void synthSamplesMultiSID(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+	static void	synthSamplesStrippedMultiSID(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
 
 	
 	// ---------- HW configuration -----------------
@@ -204,9 +209,6 @@ public:
 	*/
 	static uint8_t setSID6581(bool set_6581);
 	
-#ifdef PSID_DEBUG_ADSR
-	void debugVoice(uint8_t voice_idx);
-#endif
 protected:
 	friend Envelope;
 	friend DigiDetector;
@@ -252,8 +254,8 @@ protected:
 	int32_t			_dac_offset;
     uint8_t 		 _volume;		// 4-bit master volume
 
-	float			_pan_left;		// not used for ext-multi-SID mode..
-	float			_pan_right;
+	float			_pan_left[3];
+	float			_pan_right[3];
 	
 	DigiDetector*	_digi;
 private:
@@ -264,8 +266,13 @@ private:
 	uint16_t		_addr;			// start memory address that the SID is mapped to
 
 	// internal state of external filter
-	double _ext_lp_out;		// previous "low pass" output of external filter
-	double _ext_hp_out;		// previous "high pass" output of external filter	
+	double _cutoff_high_pass_ext;
+		// left 
+	double _left_lp_out;		// previous "low pass" output of external filter
+	double _left_hp_out;		// previous "high pass" output of external filter	
+		// right 
+	double _right_lp_out;		// previous "low pass" output of external filter
+	double _right_hp_out;		// previous "high pass" output of external filter	
 };
 
 #endif

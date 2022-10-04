@@ -253,7 +253,7 @@ double* Filter6581::getCutoff6581(int distort_level) {
 
 #define DAMPEN 0.7	// needed to avoid wild oscillations in wf_02_BP_6581.sid test song
 
-double Filter6581::doGetFilterOutput(double sum_filter_in, double sum_nofilter_in, double* band_pass, double* low_pass, double* hi_pass) {
+double Filter6581::doGetFilterOutput(double sum_filter_in, double* band_pass, double* low_pass, double* hi_pass) {
 
 	(*hi_pass) = (sum_filter_in + (*band_pass) * _resonance + (*low_pass)) * DAMPEN;
 	(*band_pass) = (*band_pass) - (*hi_pass) * cutoffMultiplier(-(*hi_pass));
@@ -266,5 +266,5 @@ double Filter6581::doGetFilterOutput(double sum_filter_in, double sum_nofilter_i
 	if (_bandpass_ena)	{ filter_out -= (*band_pass); }
 	if (_lowpass_ena)	{ filter_out += (*low_pass); }		
 			
-	return sum_nofilter_in + filter_out;
+	return filter_out;
 }

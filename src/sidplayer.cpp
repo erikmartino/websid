@@ -414,16 +414,16 @@ extern "C" uint8_t EMSCRIPTEN_KEEPALIVE envSetNTSC(uint8_t is_ntsc) {
 
 // ----------------- generic handling -----------------------------------------
 
-// This is driving the emulation: Each call to computeAudioSamples() delivers
-// some fixed numberof audio samples and the necessary emulation timespan is
-// derived from it:
-
 inline void applyStereoEnhance() {
 	uint32_t s;
 	if((_effect_level > 0) && (s = LVCS_Process(_lvcs_handle, (const LVM_INT16*)_synth_buffer, _synth_buffer, _chunk_size))) {
 		fprintf(stderr, "error: LVCS_Process %lu %hu\n", s, _chunk_size);
 	}
 }
+
+// This is driving the emulation: Each call to computeAudioSamples() delivers
+// some fixed numberof audio samples and the necessary emulation timespan is
+// derived from it:
 
 extern "C" int32_t computeAudioSamples()  __attribute__((noinline));
 extern "C" int32_t EMSCRIPTEN_KEEPALIVE computeAudioSamples() {
@@ -556,6 +556,8 @@ LVM_Fs_en getSampleRateEn(uint32_t sample_rate) {
 }
 
 void configurePseudoStereo() {
+	if (!_chunk_size) return;
+	
 	if (_lvcs_handle == LVM_NULL) {
 		// capabilities used for LVCS_Memory and LVCS_Init must be the same!
 		_lvcs_caps.MaxBlockSize= _chunk_size;
@@ -568,6 +570,8 @@ void configurePseudoStereo() {
 		if (LVCS_Init(&_lvcs_handle, &_lvcs_mem_tab, &_lvcs_caps)) {
 			fprintf(stderr, "error: LVCS_Init\n");
 		}
+		
+	//	fprintf(stderr, "alloc stereo for size %d\n", _chunk_size);
 	}
 
 	// caution: LVCS_GetParameters is a garbage API: changing the returned "ref to original" will cause any
@@ -582,6 +586,7 @@ void configurePseudoStereo() {
 
 	_lvcs_params.EffectLevel    = _effect_level < 0 ? 0 : _effect_level;
 	_lvcs_params.ReverbLevel    = _reverb_level; // supposedly in %!
+						
 	_lvcs_params.SpeakerType = _speaker_type;
 
 	_lvcs_params.SourceFormat = LVCS_STEREO;		// with "per voice panning" input signal is "always" stereo

@@ -111,7 +111,7 @@ LVCS_ReturnStatus_en LVCS_Process_CS(LVCS_Handle_t              hInstance,
                         pInData,                    /* Pointer to the input data */
                         pOutData,                   /* Pointer to the output data */
                         NumSamples);                /* Number of samples to process */
-    if(err !=LVCS_SUCCESS)	// XXX
+    if(err != LVCS_SUCCESS)	// XXX
     {
 		fprintf(stderr, "error: LVCS_StereoEnhancer %u\n", err);
         return err;

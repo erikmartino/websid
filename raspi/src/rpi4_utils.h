@@ -39,7 +39,7 @@ void installSigHandler(callback_function callback);
 
 // ---------- performance tuning related --------------
 void scheduleRT();
-void migrateThreadToCore3();
+void migrateThreadToCore(int idx);
 
 /**
 * Force maximum CPU clock rate on core #0 & core #3.

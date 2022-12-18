@@ -34,7 +34,7 @@ u32 *_script_buf0;
 u32 *_script_buf1; 
 
 static int setup_shared_mem(void) {
-//	u32 i;
+	u32 i;
 	
 	// setup buffers that can be mapped directly into "userland";
 	// using kernel mem should ensure that there are no sudden 
@@ -42,18 +42,22 @@ static int setup_shared_mem(void) {
 
 	// alloc/reserve a big enough, page aligned buffer (so that used relative 
 	// address offsets will start at 0)
-	_raw_buffer = kmalloc(AREA_SIZE + 2*PAGE_SIZE, GFP_KERNEL & ~__GFP_RECLAIM);	// optimistic allocation without _any_ attempt to free memory at all
-//	_raw_buffer = kmalloc(AREA_SIZE + 2*PAGE_SIZE, GFP_KERNEL);
+	
+	// optimistic allocation without _any_ attempt to free memory at all
+	_raw_buffer = kmalloc(AREA_SIZE + 2*PAGE_SIZE, 
+					GFP_KERNEL & ~__GFP_RECLAIM & ~__GFP_MOVABLE);
 	
 	if (_raw_buffer) {
 		_shared_area = (u8 *)(((u32)_raw_buffer + PAGE_SIZE -1) & PAGE_MASK);	// page aligned
 			
+		// make both buffers page aligned just in case
 		_script_buf0 = (u32*)(_shared_area + RESERVED_ENTRIES*sizeof(u32));
-		_script_buf1 = &(_script_buf0[(MAX_ENTRIES+1) * INTS_PER_ENTRY]);
+		_script_buf1 = (u32*)(((void*)(_script_buf0))+BUF_SIZE);
 		
-		// set an end marker as a last resort lest a flawed producer creates a buffer overflow
-		_script_buf0[MAX_ENTRIES*INTS_PER_ENTRY] = 0;
-		_script_buf1[MAX_ENTRIES*INTS_PER_ENTRY] = 0;
+		// init with "end markers" just in case
+		for (i = 0; i < (BUF_SIZE >> 2); i++) {
+			_script_buf0[i] = _script_buf1[i] = 0;
+		}
 		
 		_fetch_flag_ptr = (volatile u32*)(_shared_area + (FETCH_FLAG_OFFSET << 2));
 		_feed_flag_ptr = (volatile u32*)(_shared_area + (FEED_FLAG_OFFSET << 2));
@@ -87,10 +91,10 @@ static int websid_mmap(struct file *file, struct vm_area_struct *vma)
 	unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
 	unsigned long size = vma->vm_end - vma->vm_start;	// size of the memory area
 
-	printk("websid: starting websid_mmap\n");
+//	printk("websid: starting websid_mmap\n");
 
 	if (offset & ~PAGE_MASK) {
-		printk("websid: offset not aligned: %ld\n", offset);
+//		printk("websid: offset not aligned: %ld\n", offset);
 		return -ENXIO;
 	}   
 /*
@@ -100,7 +104,7 @@ static int websid_mmap(struct file *file, struct vm_area_struct *vma)
 	}
 	*/	
 	if ((vma->vm_flags & VM_WRITE) && !(vma->vm_flags & VM_SHARED)) {
-	     printk("websid: writeable mappings must be shared, rejecting\n");
+//	     printk("websid: writeable mappings must be shared, rejecting\n");
 	     return(-EINVAL);
 	}
 
@@ -110,23 +114,23 @@ static int websid_mmap(struct file *file, struct vm_area_struct *vma)
 	// enter pages into mapping of application:
 	if (remap_pfn_range(vma, vma->vm_start,
 						virt_to_phys((void*)_shared_area) >> PAGE_SHIFT, 
-						size, PAGE_SHARED))
-	{
-		printk("websid: remap page range failed\n");
+						size, PAGE_SHARED)) {
+//		printk("websid: remap page range failed\n");
 		return -ENXIO;
 	}
 
-	printk("websid: success websid_mmap\n");	
+//	printk("websid: success websid_mmap\n");	
 	return(0);
 }
 
 static void websid_unmmap(struct file *file) {
-	// it would seem logical to have some counterpart to remap_pfn_range - which would allow 
-	// the kernel to remove a kernel mapping when the "userland" closes the file descriptor 
-	// to the device.. it just makes no sense that the mappings are still active after the
-	// device is already "disconnected".. if such an API exists - I have not found it 
-	// (so for now this is a useless no-op and old processes can still mess with the 
-	// driver's memory even after they are no longer supposed to be able to do so):-(
+	// it would seem logical to have some counterpart to remap_pfn_range - which would 
+	// allow the kernel to remove a kernel mapping when the "userland" closes the file 
+	// descriptor to the device.. it just makes no sense that the mappings are still 
+	// active after the device is already "disconnected".. if such an API exists - I 
+	// have not found it (so for now this is a useless no-op and old processes can 
+	// still mess with the driver's memory even after they are no longer supposed to 
+	// be able to do so):-(
 	
 	// reminder: file->private_data might be used to pass around data if necessary
 }

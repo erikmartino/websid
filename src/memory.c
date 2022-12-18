@@ -65,10 +65,27 @@ uint8_t memMatch(uint16_t addr, uint8_t* pattern, uint8_t len) {
 static void setMemBank(uint8_t b) {
 	// note: processor port related functionality (see addr 0x0) is NOT implemented
 	_memory[0x0001] = b;
+	/*
+	// the only song that I am aware of that uses the "processor port direction"
+	// to filter the memory bank settings that it is making is Chocolatebar.sid
+
+	// and to make it work, the below add-on logic would be an additional special
+	// case that must be checked for each RAM write (see WRITE_RAM). I'll rather
+	// have the emulation run faster for everybody else than to slow it down
+	// just to make this one song (let alone a bad one) happy..
+
+	uint8_t read_only_mask = _memory[0x0000] ^ 0xff;
+	uint8_t keep = _memory[0x0001] & read_only_mask;
+	uint8_t set = b & _memory[0x0000];
+
+	_memory[0x0001] = keep | set;
+	*/
 }
 
 void memSetDefaultBanksPSID(uint8_t is_rsid, uint16_t init_addr,
 							uint16_t load_end_addr) {
+
+	_memory[0x0000] = 0x2f;	// default processor port mask
 
 	// default memory config: basic ROM, IO area & kernal ROM visible
 	uint8_t mem_bank_setting = 0x37;
@@ -236,6 +253,7 @@ uint8_t memGet(uint16_t addr) {
 // writes always go to the RAM) example: Vikings.sid copied
 // player data to BASIC ROM area while BASIC ROM is turned on..
 #define WRITE_RAM(addr, value) \
+	/* if (addr == 0x0001) setMemBank(value); else*//* not worth it! */\
 	_memory[addr] = value;
 
 // normally all writes to IO areas should "write
@@ -336,7 +354,9 @@ const static uint8_t _driverPSID[33] = {
 void allocIO() {
 	// this array cannot be allocated statically if the pointer is to be used
 	// directly from other compilation units.. bloody C crap..
-	if (_io_area == 0) _io_area = (uint8_t*) calloc(1, IO_AREA_SIZE);
+	if (_io_area == 0) {
+		_io_area = (uint8_t*) calloc(1, IO_AREA_SIZE);
+	}
 }
 
 #ifdef TEST
@@ -555,6 +575,7 @@ void memRsidInit(uint16_t free_space, uint16_t *init_addr, uint8_t actual_subson
 void memRsidMain(uint16_t free_space, uint16_t *init_addr) {
 	// For RSIDs that just RTS from their INIT (relying just on the IRQ/NMI
 	// they have started) there should better be something to return to..
+	// 6-byte driver (as compared to bigger 33 bytes PSID driver)
 
 	if (!free_space) {
 		return;	// no free space anywhere.. that shit better not RTS!

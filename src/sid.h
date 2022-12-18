@@ -25,20 +25,20 @@ public:
 	
 	void configure(uint8_t is_ext_file, uint8_t sid_file_version, uint16_t flags, uint8_t* addr_list);
 protected:
-	void init(uint16_t* addr, uint8_t* is_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
-				uint8_t* ext_multi_sid_mode);
+	void init(uint16_t* addrs, bool* set_6581, uint8_t* target_chan, uint8_t* second_chan_idx,
+				bool* ext_multi_sid_mode);
 				
 	static uint16_t getSidAddr(uint8_t center_byte);
-	
+		
 	friend class SID;
 private:
-	uint16_t* _addr;			// array of addresses
-	uint8_t* _is_6581;			// array of models
+	uint16_t* _addrs;			// array of addresses
+	bool* _is_6581;				// array of models
 	
 	// use of stereo:
 	uint8_t* _target_chan;		// array of used channel-idx (for stereo scenarios)
 	uint8_t* _second_chan_idx;	// single int: index of the 1st SID that maps to the 2nd stereo channel
-	uint8_t* _ext_multi_sid_mode;// single int: activates "extended sid file" handling
+	bool* _ext_multi_sid_mode;	// single int: activates "extended sid file" handling
 };
 
 
@@ -66,9 +66,9 @@ public:
 	/**
 	* Resets this instance according to the passed params.
 	*/
-	void resetModel(uint8_t is_6581);
-	void reset(uint16_t addr, uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate,
-				 uint8_t is_rsid, uint8_t is_compatible, uint8_t output_channel);
+	void resetModel(bool set_6581);
+	void reset(uint16_t addr, uint32_t sample_rate, bool set_6581, uint32_t clock_rate,
+				 uint8_t is_rsid, uint8_t is_compatible);
 	void resetStatistics();
 		
 	/**
@@ -82,6 +82,12 @@ public:
 	* Handles read access to the IO area that this SID is mapped into.
 	*/
 	uint8_t readMem(uint16_t addr);
+	
+	/**
+	* Gets the voice specific envelope level considering additional mute-features.
+	*/
+	uint8_t readVoiceLevel(uint8_t voice_idx);
+
 	
 	/**
 	* Gets the last value actually written to this address (even for write-only regs).
@@ -99,13 +105,23 @@ public:
 	uint8_t isModel6581();
 	
 	/**
-	* Generates sample output data based on the current SID state.
+	* Generates audio output data based on the current SID state.
 	* 
 	* @param synth_trace_bufs when used it must be an array[4] containing
 	*                       buffers of at least length "offset"
+	* @param s_l returns left stereo sample
+	* @param s_r returns right stereo sample
 	*/		
-	void synthSample(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset, double* scale, uint8_t do_clear);
-	void synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset, double* scale, uint8_t do_clear);
+	void synthSample(int16_t** synth_trace_bufs, uint32_t offset, int32_t* s_l, int32_t* s_r);
+	
+	/**
+	* Stripped down (for performance) version of above synthSample.
+	*
+	* @param s_l returns left stereo sample
+	* @param s_r returns right stereo sample
+	*/
+	void synthSampleStripped(int16_t** synth_trace_bufs, uint32_t offset, int32_t* s_l, int32_t* s_r);
+
 
 	/**
 	* Clocks this instance by one system cycle.
@@ -120,20 +136,29 @@ public:
 	static double getCyclesPerSample();
 
 	/**
-	* Rescaling that should be used on the output signal (depending on the used number of SID chips).
-	*/
-	static double getScale();
-
-	/**
 	* Total number of SID chips used in the current song.
 	*/
 	static uint8_t getNumberUsedChips();
+	/**
+	* Base address of specified SID chip.
+	*/
+	static uint16_t getSIDBaseAddr(uint8_t idx);
 		
 	/**
 	* Resets all used SID chips.
 	*/
 	static void resetAll(uint32_t sample_rate, uint32_t clock_rate, uint8_t is_rsid,
 							uint8_t is_compatible);
+
+	/**
+	* Sets the pannnig for all SIDs.
+	*/
+	static void initPanning(float *panPerSID);
+
+	/**
+	* Sets the panning for this SID.
+	*/
+	void setPanning(uint8_t voice_idx, float panning);
 
 	/**
 	* Clock all used SID chips.
@@ -150,7 +175,6 @@ public:
 	*/	
 	static const char* getGlobalDigiTypeDesc();
 	
-
 	/**
 	* Resets whatever is is that might be counted.
 	*/	
@@ -171,27 +195,27 @@ public:
 	/**
 	* Renders the combined output of all currently used SIDs.
 	*/
-	static void	synthSample(int16_t* buffer, int16_t** synth_trace_bufs, double* scale, uint32_t offset);
-	static void	synthSampleStripped(int16_t* buffer, int16_t** synth_trace_bufs, double* scale, uint32_t offset);
+	static void	synthSamplesSingleSID(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+	static void synthSamplesMultiSID(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
+	static void	synthSamplesStrippedMultiSID(int16_t* buffer, int16_t** synth_trace_bufs, uint32_t offset);
 
 	
 	// ---------- HW configuration -----------------
 	static struct SIDConfigurator* getHWConfigurator();
 	
-	static uint8_t isSID6581();
+	static bool isSID6581();
 	/**
 	* Manually override original "SID model" setting from music file.
 	*/
-	static uint8_t setSID6581(uint8_t is6581);
+	static uint8_t setSID6581(bool set_6581);
 	
-#ifdef PSID_DEBUG_ADSR
-	void debugVoice(uint8_t voice_idx);
-#endif
 protected:
 	friend Envelope;
 	friend DigiDetector;
 	friend WaveGenerator;
 
+	void setFilterModel(bool set_6581);
+	
 	WaveGenerator* getWaveGenerator(uint8_t voice_idx);
 	
 	// API exposed to internal (SID related) components..
@@ -214,21 +238,25 @@ private:
 	/**
 	* Reconfigures all used chips to the specified model.
 	*
-	* @param is_6581 array with one byte corresponding to each available chip
+	* @param set_6581 array with one byte corresponding to each available chip
 	*/
-	static void	setModels(const uint8_t* is_6581);
+	static void	setModels(const bool* set_6581);
 	
-	void		resetEngine(uint32_t sample_rate, uint8_t is_6581, uint32_t clock_rate);
-	void		clockOscillators();
+	void		resetEngine(uint32_t sample_rate, bool set_6581, uint32_t clock_rate);
+	void		clockWaveGenerators();
 	
 protected:
-	uint8_t			_is_6581;
+	bool			_is_6581;
 	uint8_t			_bus_write;	// bus bahavior for "write only" registers
 	
 	// SID model specific distortions (based on resid's analysis)
 	int32_t			_wf_zero;
 	int32_t			_dac_offset;
+    uint8_t 		 _volume;		// 4-bit master volume
 
+	float			_pan_left[3];
+	float			_pan_right[3];
+	
 	DigiDetector*	_digi;
 private:
 	WaveGenerator*	_wave_generators[3];
@@ -236,7 +264,15 @@ private:
 	Filter*			_filter;
 	
 	uint16_t		_addr;			// start memory address that the SID is mapped to
-	uint8_t			_dest_channel;	// which stereo channel to output to
+
+	// internal state of external filter
+	double _cutoff_high_pass_ext;
+		// left 
+	double _left_lp_out;		// previous "low pass" output of external filter
+	double _left_hp_out;		// previous "high pass" output of external filter	
+		// right 
+	double _right_lp_out;		// previous "low pass" output of external filter
+	double _right_hp_out;		// previous "high pass" output of external filter	
 };
 
 #endif

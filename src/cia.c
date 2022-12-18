@@ -149,8 +149,7 @@ struct Timer {
     struct TimerState {
 		uint16_t 	timer_latch;// used to re-load counter
 		uint32_t 	scripted_transition;
-		uint16_t	counter;
-
+		
 		// performance optimitaion
 		uint8_t is_started;		// redundant to respective ctrl reg flag
 
@@ -189,15 +188,20 @@ uint8_t ciaIRQ() {
 // perf optimization: inline short functions repeatedly used during clocking
 // see "memory_opt.h" for mor information
 
+// note: an earlier attempt to use a cached 16-bit "counter" (instead of repeatedly using below 8-bit manipulations) 
+// was flawed and therefore rollbacked - testcase: Digidrv.sid
+
 #define READ_COUNTER(t, timer_idx) \
-	t->ts[timer_idx].counter
+	(memReadIO(t->memory_address + _offset_lo_byte[timer_idx])|(memReadIO(t->memory_address + _offset_lo_byte[timer_idx]+1)<<8))
 
 //	note: counter is reloaded from latch in the following 3 scenarios:
 //	1) on any underflow (see underflow())
 //	2) on force load (see setControl)
 //	3) hi-byte prescaler write *while stopped* (see setTimerLatch())
 #define WRITE_COUNTER(t, timer_idx, value) \
-	t->ts[timer_idx].counter = value
+	uint16_t waddr= t->memory_address + _offset_lo_byte[timer_idx];\
+	memWriteIO(waddr, value&0xff);\
+	memWriteIO(waddr+1, value >>8);
 
 #define UPDATE_INT_MASK(t, addr, new_mask) \
 	memWriteIO(addr, new_mask); \
@@ -264,7 +268,6 @@ static void initTimer(struct Timer* t, uint8_t timer_idx) {
 
 	//	uint16_t timer= READ_COUNTER(t, timer_idx);		// bootstrap using current memory settings..
 	t->ts[timer_idx].timer_latch = timer;
-	t->ts[timer_idx].counter = 0;
 
 	const uint16_t addr2 = t->memory_address + 0x0e + timer_idx;
 	t->ts[timer_idx].is_started = memReadIO(addr2) & 0x1;
@@ -633,8 +636,13 @@ void ciaClockRSID() {
 
 // "PSID only" performance optimizations:
 void ciaClockRasterPSID() {
-	// use no timers *at all*
+	// ideally this would use no timers *at all* - but some RASTER IRQ PSIDs
+	// actually expect to read a live timer... testcase: Delta_Mix-E-Load_loader.sid
+	
+	struct Timer* timer1 = &(_cia[CIA1]);
+	clock(timer1);
 }
+
 void ciaClockTimerPSID() {
 	// PSID exclusively uses CIA1/A! (this could probably be further
 	// sped up by replacing the regular timer impl with some dummy

@@ -1,15 +1,32 @@
 # WebSid (playback device driver)
 
 ################################################################################
-Experimental! This driver is still in development and it is not yet running 
-in a stable manner. In order to allow for precise timing, it blocks interrupts 
-which some parts of the OS do not seem to appreciate.
-Sometimes the driver runs fine for a long time and next time it just freezes
-the machine after 10secs. Make sure to not have any unsaved work open when 
-you start the driver! In spite of its stability issues, the driver allows to 
-check which of the normal player's glitches are simply due to the timing 
-having been messed up by the RPi4's interrupts.
+
+CAUTION: This implementation has been tuned to reliably work with a specific 
+set of kernel features and a specifc runtime configuration. There is a high 
+probability that it will lead to system crashes when used on a differently 
+configured system!
+
+Specifically:
+
+1) CPU cores #2 and #3 must be completely isolated from regular use by the
+   kernel (see instructions in parent folder README.md). If other system critical
+   tasks are still scheduled on the respective cores, then these will likely
+   be starved - leading to a system crash and potential FS corruption.
+   
+2) When compiling the kernel the "Timer tick handling" must be set to 
+   "Full dynaticks system" - aka NO_HZ_FULL (I also disabled "Old Idle dynaticks 
+   config" but that probably isn't necessary.). This mode should also benefit 
+   the regular local thread playback (see parent folder) since it will remove 
+   the 100Hz "arch_timer" IRQs that that seem to be the biggest source of 
+   timing disruptions. (I am using the regular "Desktop" model from the 
+   "Preemption Model" selection - but I guess the other modes might also work."
+
+Make sure to not have any unsaved work on the device when using this driver!
+Also it is a good idea to make a system backup before first using it!   
+
 ################################################################################
+
 
 This driver replays micro-second exact writes to a connected MOS8580 or
 MOS6581 SID chip. Respective "playlists" are fed to the driver using a memory 
@@ -21,40 +38,11 @@ userland player will automatically use this driver whenever it detects it.
 The cycle exact timing will not make any difference to most "normal" SID songs, 
 but it is crucial for timing critical songs (e.g. songs that use "advanced" 
 digi-sample techniques). You can check /var/log/kern.log - where the driver will
-log the timing performance whenever a song is done playing. (When the c1 & c2 
-counts are 0 it means that every GPIO write was performed in exactly the
+log the timing performance whenever a song is done playing. (Whan all the 
+numbers are 0 it means that every GPIO write was performed in exactly the
 right micro second.)
 	
-	
-Note #1: Linux must be booted using "isolcpus=3 rcu_nocbs=3 rcu_nocb_poll=3 
-nohz_full=3" (see /boot/cmdline.txt) so that the CPU core #3 can be completely 
-hijacked by this module without starving other threads that might be vital to the 
-system. There will then still be the below threads left on core #3 but it seems 
-that those can be safely starved "for a while":
 
-pi@raspberrypi:~ $ ps -eo pid,ppid,ni,comm | grep /3
-   25     2   0 cpuhp/3
-   26     2   - migration/3
-   27     2   0 ksoftirqd/3
-   28     2   0 kworker/3:0
-   29     2 -20 kworker/3:0H
- (cpuhp=cpu hotplug, migration=distributes workload across CPU cores,
- ksoftirq=thread raised to handle unserved software interrupts)   
-
-
- Note #2: The kernel will notice the hijacking of core #3 and would log 
- lengthy "stall" and "hung_task" warnings to  /var/log/kern.log 
- The websid player automatically disables those warnings (only when using 
- the "device driver playback method" by changing the respective configuration 
- files, e.g.
-
-   /sys/module/rcupdate/parameters/rcu_cpu_stall_suppress
-   /proc/sys/kernel/hung_task_timeout_secs
-
- The original settings are restored when rebooting.
-	
-	
-	
 ## Howto build/install
 
 	sudo make
@@ -69,7 +57,7 @@ pi@raspberrypi:~ $ ps -eo pid,ppid,ni,comm | grep /3
 
 	
 
-## Depencencies
+## Dependencies
 
 You'll need a Raspberry Pi 4B and the Linux kernel source must have been installed and compiled
 (see: https://www.stephenwagner.com/2020/03/17/how-to-compile-linux-kernel-raspberry-pi-4-raspbian/ ).
@@ -79,8 +67,7 @@ fact that a stock kernel refuses access to APIs like "sched_set_fifo" and "gpio_
 modules. So in order to use this module on your machine you'll have to disable the silly GPL 
 checks before building your kernel. see: 
 kernel/linux/include/linux/license.h  (just "return 1;" in "license_is_gpl_compatible")
-(and maybe kernel/linux/scripts/mod/modpost.c (just "return;" in "check_for_gpl_usage"))
-PS: rebuilding a previously built kernel with these changes takes less than 5 minutes..
+PS: don't worry, rebuilding a previously built kernel with only this change takes less than 5 minutes..
 
 
 ## Background information
@@ -117,8 +104,49 @@ When the play loop waits for the next script, there are different possible senar
        the deque based "userland" impl may have allowed 2 buffers in those special cases
        where the playback was done handling the script but the current playback interval
        was still ongoing (this might have added some "load averaging" in those special cases).
+	   This scenario might occur when using a Raspberry device that is too slow or a device 
+	   that has automatically clocked down due to cpu overheating..
 
 
+	   
+It seems there are some core specific system threads, e.g.: 
+ (cpuhp=cpu hotplug, migration=distributes workload across CPU cores,
+ ksoftirq=thread raised to handle unserved software interrupts)   
+
+pi@raspberrypi:~ $ ps -eo pid,ppid,ni,comm | grep /3
+   25     2   0 cpuhp/3
+   26     2   - migration/3
+   27     2   0 ksoftirqd/3
+   28     2   0 kworker/3:0
+   29     2 -20 kworker/3:0H
+
+some of which (e.g. "rcuog/3") are already handled on a different core due to the 
+used cmdline.txt settings. 
+
+The above still are on core #3, e.g. see:
+
+pi@raspberrypi:~ $ ps -o psr 25
+  PSR
+  3
+(or use "ps -eF" to check respective PSR for all running processes)
+
+.. and it seems that they cannot be migrated elsewhere (e.g. "taskset -pc 2 25" fails..)
+
+The device driver tries to no completely starve these other threads by 
+proactively calling schedule() whenever there is time for it available.
+
+   
+Note: The kernel will notice the hijacking of core #3 and would log 
+lengthy "stall" and "hung_task" warnings to  /var/log/kern.log 
+The websid player automatically disables those warnings (only when using 
+the "device driver playback method" by changing the respective configuration 
+files, e.g.
+
+   /sys/module/rcupdate/parameters/rcu_cpu_stall_suppress
+   /proc/sys/kernel/hung_task_timeout_secs
+
+ The original settings are restored when rebooting.
+	
 
 ## License
 Terms of Use: This software is licensed under a CC BY-NC-SA 

@@ -13,6 +13,10 @@
 SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernalROM, nextFrameCB) { 
 		$this.base.call(this, backend_SID.Module, 2);	// use stereo (for the benefit of multi-SID songs)
 		this.playerSampleRate;
+
+		this.maxSids = 10;	// redundant to C side code
+		
+		this.cutoffSize = 1024;
 		
 		this._scopeEnabled= false;
 
@@ -30,10 +34,47 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 		this._digiShownRate= 0;
 		
 		this.resetDigiMeta();
+		
+		if (!backend_SID.Module.notReady) {
+			// in sync scenario the "onRuntimeInitialized" has already fired before execution gets here,
+			// i.e. it has to be called explicitly here (in async scenario "onRuntimeInitialized" will trigger
+			// the call directly)
+			this.doOnAdapterReady();
+		}				
 	}; 
-	// TinyRSid's sample buffer contains 2-byte (signed short) sample data 
-	// for 1 channel
 	extend(EmsHEAP16BackendAdapter, $this, {
+		doOnAdapterReady: function() {
+			// called when runtime is ready (e.g. asynchronously when WASM is loaded)
+			if (typeof this.panArray != 'undefined') {
+				this.initPanningCfg(this.panArray);
+			}			
+		},
+		/**
+		* @param panArray 30-entry array with float-values ranging from 0.0 (100% left channel) to 1.0 (100% right channel) .. one value for each voice of the max 10 SIDs
+		*/
+		initPanningCfg: function(panArray) {
+			if (panArray.length != this.maxSids*3) {
+				console.log("error: initPanningCfg requires an array with panning-values for each of 10 SIDs that WebSid potentially supports.");
+			} else {
+				// note: this might be called before the WASM is ready
+				this.panArray = panArray;
+				
+				if (!backend_SID.Module.notReady) {
+					this.Module.ccall('initPanningCfg', 'number', ['number','number','number','number','number','number','number','number','number','number',
+																	'number','number','number','number','number','number','number','number','number','number',
+																	'number','number','number','number','number','number','number','number','number','number'], 
+															[panArray[0],panArray[1],panArray[2],panArray[3],panArray[4],panArray[5],panArray[6],panArray[7],panArray[8],panArray[9],
+															panArray[10],panArray[11],panArray[12],panArray[13],panArray[14],panArray[15],panArray[16],panArray[17],panArray[18],panArray[19],
+															panArray[20],panArray[21],panArray[22],panArray[23],panArray[24],panArray[25],panArray[26],panArray[27],panArray[28],panArray[29],]);
+				}
+			}
+		},
+		getPanning: function(sidIdx, voiceIdx) {
+			return this.Module.ccall('getPanning', 'number', ['number', 'number'], [sidIdx, voiceIdx]);
+		},
+		setPanning: function(sidIdx, voiceIdx, panning) {
+			this.Module.ccall('setPanning', 'number',  ['number','number','number'], [sidIdx, voiceIdx, panning]);
+		},		
 		nopCB: function() {
 		},
 		resetDigiMeta: function() {
@@ -96,8 +137,13 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 					this._digiShownRate= Math.round(this._digiRate/this._digiBatches);
 					
 					const arr = Object.keys(this._digiTypes).sort();
+					var c = 0;
 					for (const key of arr) {
 						if (key.length && (key != "NONE"))
+							c++;
+					}
+					for (const key of arr) {
+						if (key.length && (key != "NONE")  && ((c == 1) || (key != "D418")))	// ignore combinations with D418
 							this._digiShownLabel+= (this._digiShownLabel.length ? "&"+key : key);
 					}
 				}
@@ -191,7 +237,39 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 			}
 			this.resetDigiMeta();
 		
-			return this.Module.ccall('playTune', 'number', ['number', 'number'], [options.track, traceSID]);
+			var procBufSize= ScriptNodePlayer.getInstance().getScriptProcessorBufSize();
+			return this.Module.ccall('playTune', 'number', ['number', 'number', 'number'], [options.track, traceSID, procBufSize]);
+		},
+		setFilterConfig6581: function(base, max, steepness, x_offset, distort, distortOffset, distortScale, distortThreshold, kink) {
+			return this.Module.ccall('setFilterConfig6581', 'number', 
+										['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'], 
+										[base, max, steepness, x_offset, distort, distortOffset, distortScale, distortThreshold, kink]);
+		},
+		getFilterConfig6581: function() {
+			var heapPtr = this.Module.ccall('getFilterConfig6581', 'number') >> 3;	// 64-bit
+
+			var result= {
+				"base": this.Module.HEAPF64[heapPtr+0],
+				"max": this.Module.HEAPF64[heapPtr+1],
+				"steepness": this.Module.HEAPF64[heapPtr+2],
+				"x_offset": this.Module.HEAPF64[heapPtr+3],
+				"distort": this.Module.HEAPF64[heapPtr+4],
+				"distortOffset": this.Module.HEAPF64[heapPtr+5],
+				"distortScale": this.Module.HEAPF64[heapPtr+6],
+				"distortThreshold": this.Module.HEAPF64[heapPtr+7],
+				"kink": this.Module.HEAPF64[heapPtr+8],
+			};
+			return result;
+		},
+		getCutoffsLength: function() {
+			return this.cutoffSize;
+		},
+		fetchCutoffs6581: function(distortLevel, destinationArray) {
+			var heapPtr = this.Module.ccall('getCutoff6581', 'number', ['number'], [distortLevel]) >> 3;	// 64-bit
+
+			for (var i= 0; i<this.cutoffSize; i++) {
+				destinationArray[i]= this.Module.HEAPF64[heapPtr+i];
+			}
 		},
 		teardown: function() {
 			// nothing to do
@@ -252,6 +330,46 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 			this.Module.ccall('envSetNTSC', 'number', ['number'], [ntsc]);
 		},
 		
+		// access used SID chips meta information
+		countSIDs: function() {
+			return this.Module.ccall('countSIDs', 'number');
+		},
+		getSIDBaseAddr: function(sidIdx) {
+			return this.Module.ccall('getSIDBaseAddr', 'number', ['number'], [sidIdx]);
+		},
+
+		/**
+		* Gets a SID's register with about ~1 frame precison - using the actual position played
+		* by the WebAudio infrastructure.
+		*
+		* prerequisite: ScriptNodePlayer must be configured with an "external ticker" for precisely timed access.
+		*/
+		getSIDRegister: function(sidIdx, reg) {
+			
+			var p= ScriptNodePlayer.getInstance();
+			var bufIdx= p.getTickToggle();
+			var tick= p.getCurrentTick(); // playback position in currently played WebAudio buffer (in 256-samples steps)
+			
+			return this.Module.ccall('getSIDRegister2', 'number', ['number', 'number', 'number', 'number'], [sidIdx, reg, bufIdx, tick]);
+		},
+		/**
+		* Gets a specific SID voice's output level (aka envelope) with about ~1 frame precison - using the actual position played
+		* by the WebAudio infrastructure.
+		*
+		* prerequisite: ScriptNodePlayer must be configured with an "external ticker" for precisely timed access.
+		*/
+		readVoiceLevel: function(sidIdx, voiceIdx) {
+			
+			var p= ScriptNodePlayer.getInstance();
+			var bufIdx= p.getTickToggle();
+			var tick= p.getCurrentTick(); // playback position in currently played WebAudio buffer (in 256-samples steps)
+			
+			return this.Module.ccall('readVoiceLevel', 'number', ['number', 'number', 'number', 'number'], [sidIdx, voiceIdx, bufIdx, tick]);
+		},
+		setSIDRegister: function(sidIdx, reg, value) {
+			return this.Module.ccall('setSIDRegister', 'number', ['number', 'number', 'number'], [sidIdx, reg, value]);
+		},
+		
 		// To activate the below output a song must be started with the "traceSID" option set to 1:
 		// At any given moment the below getters will then correspond to the output of getAudioBuffer
 		// and what has last been generated by computeAudioSamples. They expose some of the respective
@@ -272,11 +390,9 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 			return result;
 		},
 
-		// XXX FIXME UNUSED?
 		readFloatTrace: function(buffer, idx) {
 			return (this.Module.HEAP16[buffer+idx])/0x8000;
 		},
-		// perf optimization: XXX FIXME UNUSED?
 		getCopiedScopeStream: function(input, len, output) {
 			for(var i= 0; i<len; i++){
 				output[i]=  this.Module.HEAP16[input+i]; // will be scaled later anyway.. avoid the extra division here /0x8000;
@@ -284,25 +400,11 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 			return len;
 		},
 
-		/**
-		* This just queries the *current* state of the emulator. It
-		* is less precisely correlated to the music that is currently playing (than the above
-		* buffers), i.e. it represents the state *after* the last emulator call (respective data
-		* may not yet have been fed to WebAudio or if it has already been fed then 
-		* WebAudio may not yet be playing it yet). The lag should normally not be very large 
-		* (<0.2s) and when using it for display purposes it would be hard to see a difference anyway.
-		*/
-		getRegisterSID: function(offset) {
-			return this.Module.ccall('getRegisterSID', 'number', ['number'], [offset]);
-		},
 		getRAM: function(offset) {
 			return this.Module.ccall('getRAM', 'number', ['number'], [offset]);
 		},
 		setRAM: function(offset, value) {
 			this.Module.ccall('setRAM', 'number', ['number', 'number'], [offset, value]);
-		},
-		setRegisterSID: function(offset, value) {
-			this.Module.ccall('setRegisterSID', 'number', ['number', 'number'], [offset, value]);
 		},
 		/**
 		* Diagnostics digi-samples (if any).
@@ -320,7 +422,49 @@ SIDBackendAdapter = (function(){ var $this = function (basicROM, charROM, kernal
 			this.Module.ccall('enableVoice', 'number', ['number', 'number', 'number'], [sidIdx, voice, on]);
 		},
 
+		getStereoLevel: function() {
+			return this.Module.ccall('getStereoLevel', 'number');
+		},
+		getReverbLevel: function() {
+			return this.Module.ccall('getReverbLevel', 'number');
+		},
+		getHeadphoneMode: function() {
+			return this.Module.ccall('getHeadphoneMode', 'number');
+		},
 		
+		/**
+		* @param effect_level -1=stereo completely disabled (no panning), 0=no stereo enhance disabled (only panning); >0= stereo enhance enabled: 16384=low 24576=medium 32767=high
+		*/
+		setStereoLevel: function(effect_level) {
+			return this.Module.ccall('setStereoLevel', 'number', ['number'], [effect_level]);
+		},
+		
+		/**
+		* @param level 0..100
+		*/
+		setReverbLevel: function(level) {
+			return this.Module.ccall('setReverbLevel', 'number', ['number'], [level]);
+		},
+		/**
+		* @param mode 0=headphone 1=ext-headphone
+		*/
+		setHeadphoneMode: function(mode) {
+			return this.Module.ccall('setHeadphoneMode', 'number', ['number'], [mode]);
+		},
+		
+		
+		/**
+		* @deprecated use getSIDRegister instead
+		*/
+		getRegisterSID: function(offset) {
+			return this.Module.ccall('getRegisterSID', 'number', ['number'], [offset]);
+		},
+		/**
+		* @deprecated use setSIDRegister instead
+		*/
+		setRegisterSID: function(offset, value) {
+			this.Module.ccall('setRegisterSID', 'number', ['number', 'number'], [offset, value]);
+		},
 		/*
 		* @deprecated APIs below - use getTraceStreams/getNumberTraceStreams instead
 		*/

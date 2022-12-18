@@ -31,7 +31,7 @@ struct gpio_desc *_cs, *_a0, *_a1, *_a2, *_a3, *_a4, *_d0, *_d0, *_d0, *_d1, *_d
 #define GPIO_BASE 0xFE200000 				/* CAUTION: RPi4 only!!! */
 
 
-// kept the wiringPi based pin numbering to ease comparisons with the
+// I've kept the wiringPi based pin numbering to ease comparisons with the
 // old "userland" impl
 #define CS      3
 #define A0      8
@@ -147,6 +147,11 @@ struct gpio_desc* gpio_output(unsigned int pin, const char *label,  int value) {
 	
 	// "label associates a string with it that can later appear in sysfs".. 
 	// *can*.. see below
+	
+	// the respective status can be queried by installing the "gpiod" package 
+	// and then running "sudo gpioinfo" (but probably the respective info is
+	// utterly useless since users of the old APIs might not show here at all..)
+	
 	if(gpio_request(pin, label)) {
 		printk("websid: gpio_request failed on pin: %d\n", pin);
 		_gpio_init_fail = 1;
@@ -270,7 +275,7 @@ static u32 _poke_value;
 	);\
 	\
 	_poke_ts = micros(); _poke_ts+= 2;	/* 2 seems to work better than 1 (maybe due to the clocks not being in sync)*/\
-	while (micros() <  _poke_ts) {}\
+	while (micros() <=  _poke_ts) {}\
 	\
 	digital_write(CS, 1);\
 }
